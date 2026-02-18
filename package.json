@@ -8,9 +8,14 @@
     "auth": "bun run src/auth.ts",
     "dev": "bun run src/index.ts",
     "start": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "dev:mock": "TELEGRAM_MOCK=true bun run src/index.ts",
+    "test": "TELEGRAM_MOCK=true bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.2",
     "@types/bun": "latest",
     "@types/qrcode-terminal": "^0.12.2"
   },

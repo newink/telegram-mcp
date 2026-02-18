@@ -21,8 +21,7 @@ function jsonResponse(payload: unknown) {
         type: "text" as const,
         text: JSON.stringify(
           payload,
-          (_key, value) =>
-            typeof value === "bigint" ? value.toString() : value,
+          (_key, value) => (typeof value === "bigint" ? value.toString() : value),
           2,
         ),
       },
@@ -74,12 +73,7 @@ function registerTools(server: McpServer) {
     "Search your Telegram dialogs by display name or username. Returns matching users, groups, and channels with their IDs.",
     {
       query: z.string().min(1).describe("Search query"),
-      limit: z
-        .number()
-        .int()
-        .positive()
-        .default(10)
-        .describe("Max results to return"),
+      limit: z.number().int().positive().default(10).describe("Max results to return"),
     },
     async ({ query, limit }) => {
       const tg = await getTelegramClient();
@@ -97,7 +91,7 @@ function registerTools(server: McpServer) {
         const username = dialog.peer.username ?? null;
         const match =
           name.toLowerCase().includes(normalizedQuery) ||
-          (username && username.toLowerCase().includes(normalizedQuery));
+          username?.toLowerCase().includes(normalizedQuery);
         if (!match) continue;
 
         dialogs.push({
@@ -125,22 +119,10 @@ function registerTools(server: McpServer) {
     {
       chatId: z.string().describe("Numeric chat ID (as string) or @username"),
       limit: z.number().int().positive().default(20).describe("Max messages"),
-      minDate: z
-        .string()
-        .optional()
-        .describe("Only messages after this ISO date"),
-      maxDate: z
-        .string()
-        .optional()
-        .describe("Only messages before this ISO date"),
-      onlyUnread: z
-        .boolean()
-        .default(false)
-        .describe("Only fetch unread messages"),
-      markAsRead: z
-        .boolean()
-        .default(false)
-        .describe("Mark fetched messages as read"),
+      minDate: z.string().optional().describe("Only messages after this ISO date"),
+      maxDate: z.string().optional().describe("Only messages before this ISO date"),
+      onlyUnread: z.boolean().default(false).describe("Only fetch unread messages"),
+      markAsRead: z.boolean().default(false).describe("Mark fetched messages as read"),
     },
     async ({ chatId: rawChatId, limit, minDate, maxDate, onlyUnread, markAsRead }) => {
       const chatId = parseChatId(rawChatId);
@@ -149,11 +131,7 @@ function registerTools(server: McpServer) {
       const parsedMaxDate = parseIsoDate(maxDate, "maxDate");
       const fetched: Message[] = [];
 
-      if (
-        parsedMinDate &&
-        parsedMaxDate &&
-        parsedMinDate.getTime() > parsedMaxDate.getTime()
-      ) {
+      if (parsedMinDate && parsedMaxDate && parsedMinDate.getTime() > parsedMaxDate.getTime()) {
         throw new Error("Invalid date range: minDate must be <= maxDate");
       }
 
@@ -213,11 +191,7 @@ function registerTools(server: McpServer) {
     "Download media (photo, video, document, etc.) from a specific message to a local file. Requires the chat ID and message ID.",
     {
       chatId: z.string().describe("Numeric chat ID (as string) or @username"),
-      messageId: z
-        .number()
-        .int()
-        .positive()
-        .describe("Message ID containing media"),
+      messageId: z.number().int().positive().describe("Message ID containing media"),
       filename: z.string().min(1).describe("Local file path to save to"),
     },
     async ({ chatId: rawChatId, messageId, filename }) => {
@@ -234,9 +208,7 @@ function registerTools(server: McpServer) {
       }
 
       if (!(msg.media instanceof FileLocation)) {
-        throw new Error(
-          `Media type "${msg.media.type}" cannot be downloaded as a file`,
-        );
+        throw new Error(`Media type "${msg.media.type}" cannot be downloaded as a file`);
       }
 
       await tg.downloadToFile(filename, msg.media);
@@ -286,10 +258,10 @@ interface Session {
 const sessions = new Map<string, Session>();
 
 function jsonRpcError(code: number, message: string, status: number) {
-  return new Response(
-    JSON.stringify({ jsonrpc: "2.0", error: { code, message }, id: null }),
-    { status, headers: { "Content-Type": "application/json" } },
-  );
+  return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code, message }, id: null }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export async function startServer() {
@@ -300,7 +272,9 @@ export async function startServer() {
     async fetch(req) {
       const url = new URL(req.url);
 
-      console.log(`[${req.method}] ${url.pathname} Accept: ${req.headers.get("accept")} Session: ${req.headers.get("mcp-session-id") ?? "none"}`);
+      console.log(
+        `[${req.method}] ${url.pathname} Accept: ${req.headers.get("accept")} Session: ${req.headers.get("mcp-session-id") ?? "none"}`,
+      );
 
       if (url.pathname !== "/mcp") {
         return new Response("Not Found", { status: 404 });
@@ -310,7 +284,7 @@ export async function startServer() {
 
       // Known session — route all methods (POST, GET, DELETE) to its transport
       if (sessionId && sessions.has(sessionId)) {
-        return sessions.get(sessionId)!.transport.handleRequest(req);
+        return sessions.get(sessionId)?.transport.handleRequest(req);
       }
 
       // Unknown session ID — stale or invalid
@@ -357,9 +331,7 @@ export async function startServer() {
     },
   });
 
-  console.log(
-    `MCP Telegram server listening on http://localhost:${port}/mcp`,
-  );
+  console.log(`MCP Telegram server listening on http://localhost:${port}/mcp`);
 
   // Connect to Telegram eagerly so errors surface at startup
   try {

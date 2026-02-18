@@ -1,6 +1,6 @@
-import { TelegramClient } from "@mtcute/bun";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
+import { TelegramClient } from "@mtcute/bun";
 import qrcode from "qrcode-terminal";
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -18,7 +18,7 @@ function loadEnv(): Record<string, string> {
   if (existsSync(envPath)) {
     for (const line of readFileSync(envPath, "utf-8").split("\n")) {
       const match = line.match(/^([^#=]+)=(.*)$/);
-      if (match) entries[match[1]!.trim()] = match[2]!.trim();
+      if (match) entries[match[1]?.trim()] = match[2]?.trim();
     }
   }
 
@@ -27,12 +27,12 @@ function loadEnv(): Record<string, string> {
 
 function saveEnv(entries: Record<string, string>) {
   const lines = Object.entries(entries).map(([k, v]) => `${k}=${v}`);
-  writeFileSync(".env", lines.join("\n") + "\n");
+  writeFileSync(".env", `${lines.join("\n")}\n`);
 }
 
 function showQr(url: string) {
   qrcode.generate(url, { small: true }, (code: string) => {
-    console.log("\n" + code);
+    console.log(`\n${code}`);
   });
 }
 
@@ -41,11 +41,8 @@ async function main() {
 
   const env = loadEnv();
 
-  const apiId =
-    env.TELEGRAM_API_ID ||
-    (await ask("  API ID (from https://my.telegram.org): "));
-  const apiHash =
-    env.TELEGRAM_API_HASH || (await ask("  API Hash: "));
+  const apiId = env.TELEGRAM_API_ID || (await ask("  API ID (from https://my.telegram.org): "));
+  const apiHash = env.TELEGRAM_API_HASH || (await ask("  API Hash: "));
 
   if (!apiId || !apiHash) {
     console.error("\n  Both API ID and API Hash are required.");
@@ -62,7 +59,7 @@ async function main() {
     storage: "bot-data/auth-session",
   });
 
-  let user;
+  let user: unknown;
 
   if (method === "2") {
     console.log("\n  Phone auth flow...\n");
@@ -76,7 +73,8 @@ async function main() {
           sms: "Check your SMS messages",
           call: "You will receive a phone call",
           flash_call: "You will receive a flash call",
-          missed_call: "You will receive a missed call — the code is the last digits of the phone number",
+          missed_call:
+            "You will receive a missed call — the code is the last digits of the phone number",
         };
         const hint = hints[sent.type] ?? `Type: ${sent.type}`;
         console.log(`\n  Code sent via ${sent.type}. ${hint}.\n`);
