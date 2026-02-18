@@ -27,8 +27,7 @@ TELEGRAM_MOCK=true bun test         # run tests
 3. **Read-first.** Write operations (send/forward/delete) require whitelisting. Tests use mock only.
 4. **Tools are atomic.** One tool = one operation. No combined "search and send" tools.
 5. **bigint → string.** Telegram IDs are bigint. JSON can't serialize bigint. Always use `jsonResponse()` helper.
-6. **Don't touch auth.ts** unless necessary. Auth works; breaking it requires a real phone to fix.
-7. **Tests without real Telegram.** Use `TELEGRAM_MOCK=true`. Never call real API in tests.
+6. **Tests without real Telegram.** Use `TELEGRAM_MOCK=true`. Never call real API in tests.
 
 ## Project Structure
 

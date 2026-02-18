@@ -267,6 +267,7 @@ function jsonRpcError(code: number, message: string, status: number) {
 export async function startServer() {
   const port = parseInt(process.env.PORT || "3000", 10);
 
+  // @ts-expect-error: Bun types require `routes` but fetch-only mode works at runtime
   Bun.serve({
     port,
     async fetch(req) {
