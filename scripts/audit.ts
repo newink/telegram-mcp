@@ -49,8 +49,8 @@ for await (const path of todoGlob.scan({ cwd: ".", absolute: false })) {
   const content = await Bun.file(path).text();
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes(TODO_MARKER)) {
-      issue(`${path}:${i + 1}: ${lines[i].trim()}`);
+    if (lines[i]!.includes(TODO_MARKER)) {
+      issue(`${path}:${i + 1}: ${lines[i]!.trim()}`);
       todoCount++;
     }
   }
@@ -86,11 +86,11 @@ header("Undocumented env vars");
 const envExample = await Bun.file(".env.example").text();
 const documentedKeys = new Set<string>();
 for (const match of envExample.matchAll(/^([A-Z_][A-Z0-9_]*)\s*=/gm)) {
-  documentedKeys.add(match[1]);
+  documentedKeys.add(match[1]!);
 }
 // Also count commented-out vars like "# TELEGRAM_MOCK=true"
 for (const match of envExample.matchAll(/^#\s*([A-Z_][A-Z0-9_]*)\s*=/gm)) {
-  documentedKeys.add(match[1]);
+  documentedKeys.add(match[1]!);
 }
 
 const usedKeys = new Set<string>();
@@ -99,11 +99,11 @@ const tsGlob = new Glob("src/**/*.ts");
 for await (const path of tsGlob.scan({ cwd: ".", absolute: false })) {
   const content = await Bun.file(path).text();
   for (const match of content.matchAll(/process\.env\.([A-Z_][A-Z0-9_]*)/g)) {
-    usedKeys.add(match[1]);
+    usedKeys.add(match[1]!);
   }
   // Also catch Bun.env usage
   for (const match of content.matchAll(/Bun\.env\.([A-Z_][A-Z0-9_]*)/g)) {
-    usedKeys.add(match[1]);
+    usedKeys.add(match[1]!);
   }
 }
 

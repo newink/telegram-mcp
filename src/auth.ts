@@ -18,7 +18,7 @@ function loadEnv(): Record<string, string> {
   if (existsSync(envPath)) {
     for (const line of readFileSync(envPath, "utf-8").split("\n")) {
       const match = line.match(/^([^#=]+)=(.*)$/);
-      if (match) entries[match[1]?.trim()] = match[2]?.trim() ?? "";
+      if (match) entries[match[1]!.trim()] = match[2]?.trim() ?? "";
     }
   }
 

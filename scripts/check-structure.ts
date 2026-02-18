@@ -9,13 +9,13 @@ const docsSource = await Bun.file("docs/tools.md").text();
 // Extract tool names from server.tool("name", ...) calls
 const codeTools = new Set<string>();
 for (const match of serverSource.matchAll(/server\.tool\(\s*["']([^"']+)["']/g)) {
-  codeTools.add(match[1]);
+  codeTools.add(match[1]!);
 }
 
 // Extract documented tool names from ## headings (single-word identifiers)
 const docTools = new Set<string>();
 for (const match of docsSource.matchAll(/^## (\S+)/gm)) {
-  docTools.add(match[1]);
+  docTools.add(match[1]!);
 }
 
 const undocumented = [...codeTools].filter((t) => !docTools.has(t));
