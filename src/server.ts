@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
 import { getTelegramClient } from "./telegram.ts";
@@ -277,10 +278,19 @@ function registerTools(server: McpServer) {
   );
 }
 
-const transports = new Map<
-  string,
-  WebStandardStreamableHTTPServerTransport
->();
+interface Session {
+  server: McpServer;
+  transport: WebStandardStreamableHTTPServerTransport;
+}
+
+const sessions = new Map<string, Session>();
+
+function jsonRpcError(code: number, message: string, status: number) {
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", error: { code, message }, id: null }),
+    { status, headers: { "Content-Type": "application/json" } },
+  );
+}
 
 export async function startServer() {
   const port = parseInt(process.env.PORT || "3000", 10);
@@ -298,49 +308,52 @@ export async function startServer() {
 
       const sessionId = req.headers.get("mcp-session-id");
 
-      if (sessionId && transports.has(sessionId)) {
-        return transports.get(sessionId)!.handleRequest(req);
+      // Known session — route all methods (POST, GET, DELETE) to its transport
+      if (sessionId && sessions.has(sessionId)) {
+        return sessions.get(sessionId)!.transport.handleRequest(req);
       }
 
+      // Unknown session ID — stale or invalid
       if (sessionId) {
-        return new Response("Session not found", { status: 404 });
+        return jsonRpcError(-32001, "Session not found", 404);
       }
 
-      if (req.method === "GET") {
-        return new Response("MCP Streamable HTTP endpoint", {
-          status: 200,
-          headers: { "Content-Type": "text/plain" },
-        });
+      // --- No session ID below ---
+
+      if (req.method !== "POST") {
+        return jsonRpcError(-32000, "Bad Request: Mcp-Session-Id required", 400);
       }
 
-      if (req.method === "DELETE") {
-        return new Response(null, { status: 204 });
+      // Parse body once to check if it's an initialize request
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return jsonRpcError(-32700, "Parse error: Invalid JSON", 400);
       }
 
-      if (req.method === "POST") {
-        const transport = new WebStandardStreamableHTTPServerTransport({
-          sessionIdGenerator: () => crypto.randomUUID(),
-          enableJsonResponse: true,
-          onsessioninitialized: (sid) => {
-            transports.set(sid, transport);
-          },
-        });
-
-        transport.onclose = () => {
-          if (transport.sessionId) {
-            transports.delete(transport.sessionId);
-          }
-        };
-
-        const server = createMcpServer();
-        await server.connect(transport);
-        return transport.handleRequest(req);
+      if (!isInitializeRequest(body)) {
+        return jsonRpcError(-32000, "Bad Request: No valid session ID provided", 400);
       }
 
-      return new Response("Method Not Allowed", {
-        status: 405,
-        headers: { Allow: "GET, POST, DELETE" },
+      // --- New session ---
+      const server = createMcpServer();
+      const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: () => crypto.randomUUID(),
+        enableJsonResponse: true,
+        onsessioninitialized: (sid) => {
+          sessions.set(sid, { server, transport });
+        },
       });
+
+      transport.onclose = () => {
+        if (transport.sessionId) {
+          sessions.delete(transport.sessionId);
+        }
+      };
+
+      await server.connect(transport);
+      return transport.handleRequest(req, { parsedBody: body });
     },
   });
 
@@ -355,4 +368,16 @@ export async function startServer() {
     console.error("Failed to connect to Telegram:", err);
     process.exit(1);
   }
+
+  // Graceful shutdown: close all sessions
+  process.on("SIGINT", async () => {
+    for (const [sid, { transport }] of sessions) {
+      try {
+        await transport.close();
+      } catch (err) {
+        console.error(`Error closing session ${sid}:`, err);
+      }
+    }
+    process.exit(0);
+  });
 }
