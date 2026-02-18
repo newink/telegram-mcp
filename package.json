@@ -26,6 +26,20 @@
   "peerDependencies": {
     "typescript": "^5"
   },
+  "knip": {
+    "entry": [
+      "src/index.ts",
+      "src/auth.ts",
+      "scripts/*.ts"
+    ],
+    "project": [
+      "src/**/*.ts",
+      "scripts/**/*.ts"
+    ],
+    "ignore": [
+      "**/*.test.ts"
+    ]
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@mtcute/bun": "^0.28.0",
