@@ -1,0 +1,66 @@
+# MCP Tools Reference
+
+## search_dialogs
+
+Search Telegram dialogs by display name or username.
+
+**Parameters:**
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| query | string | yes | — | Search query (min 1 char) |
+| limit | number | no | 10 | Max results |
+
+**Returns:** `{ query, count, dialogs: [{ type, id, name, username, unreadCount }] }`
+
+**Example:**
+```bash
+curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_dialogs","arguments":{"query":"john"}}}'
+```
+
+## get_messages
+
+Get messages from a chat with optional filtering.
+
+**Parameters:**
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| chatId | string | yes | — | Numeric ID or @username |
+| limit | number | no | 20 | Max messages |
+| minDate | string | no | — | ISO date, messages after |
+| maxDate | string | no | — | ISO date, messages before |
+| onlyUnread | boolean | no | false | Only unread messages |
+| markAsRead | boolean | no | false | Mark as read after fetch |
+
+**Modes:**
+- Default: `iterHistory()` — latest messages
+- Date filter: `iterSearchMessages()` — when minDate/maxDate set
+- Unread: `iterHistory(minId: lastReadIngoing)` — when onlyUnread=true
+
+**Returns:** `{ chatId, mode, limit, filters, count, messages: [{ id, date, sender, chat, text, mediaType }] }`
+
+## media_download
+
+Download media from a message to a local file.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| chatId | string | yes | Numeric ID or @username |
+| messageId | number | yes | Message ID with media |
+| filename | string | yes | Local path to save file |
+
+**Returns:** `{ status, chatId, messageId, filename, mediaType, message }`
+
+**Errors:** Throws if message not found, no media, or media type not downloadable.
+
+## message_from_link
+
+Fetch a message by its Telegram link.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| link | string | yes | t.me link (e.g. `https://t.me/channel/123`) |
+
+**Returns:** `{ link, found, message? }`

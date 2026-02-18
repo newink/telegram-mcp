@@ -1,11 +1,18 @@
 import { TelegramClient } from "@mtcute/bun";
-import { Dispatcher } from "@mtcute/dispatcher";
 
 let client: TelegramClient | null = null;
-let dispatcher: Dispatcher | null = null;
 
 export async function getTelegramClient(): Promise<TelegramClient> {
   if (client) return client;
+
+  // Mock mode: return fake client with in-memory data
+  if (process.env.TELEGRAM_MOCK === "true") {
+    const { createMockClient } = await import("./mock/client.ts");
+    const mockClient = createMockClient() as unknown as TelegramClient;
+    client = mockClient;
+    console.log("Using mock Telegram client");
+    return client;
+  }
 
   const apiId = Number(process.env.TELEGRAM_API_ID);
   const apiHash = process.env.TELEGRAM_API_HASH;
@@ -18,14 +25,12 @@ export async function getTelegramClient(): Promise<TelegramClient> {
   }
 
   if (!session) {
-    throw new Error(
-      "TELEGRAM_SESSION env var is required. Run `bun auth` first.",
-    );
+    throw new Error("TELEGRAM_SESSION env var is required. Run `bun auth` first.");
   }
 
   client = new TelegramClient({
     apiId,
-    apiHash: apiHash!,
+    apiHash: apiHash as string,
     storage: "bot-data/session",
   });
 
@@ -36,12 +41,5 @@ export async function getTelegramClient(): Promise<TelegramClient> {
   await client.connect();
   console.log("Connected to Telegram.");
 
-  dispatcher = Dispatcher.for(client);
-
   return client;
-}
-
-export function getDispatcher(): Dispatcher {
-  if (!dispatcher) throw new Error("Telegram client not initialized");
-  return dispatcher;
 }
