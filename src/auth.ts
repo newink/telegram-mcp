@@ -18,7 +18,7 @@ function loadEnv(): Record<string, string> {
   if (existsSync(envPath)) {
     for (const line of readFileSync(envPath, "utf-8").split("\n")) {
       const match = line.match(/^([^#=]+)=(.*)$/);
-      if (match) entries[match[1]?.trim()] = match[2]?.trim();
+      if (match) entries[match[1]!.trim()] = match[2]?.trim() ?? "";
     }
   }
 
@@ -59,7 +59,7 @@ async function main() {
     storage: "bot-data/auth-session",
   });
 
-  let user: unknown;
+  let user: { displayName: string; username?: string | null };
 
   if (method === "2") {
     console.log("\n  Phone auth flow...\n");

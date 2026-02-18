@@ -32,6 +32,7 @@ export async function getTelegramClient(): Promise<TelegramClient> {
     apiId,
     apiHash: apiHash as string,
     storage: "bot-data/session",
+    disableUpdates: true,
   });
 
   console.log("Importing Telegram session...");
