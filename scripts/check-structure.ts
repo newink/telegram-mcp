@@ -27,7 +27,9 @@ if (undocumented.length === 0 && stale.length === 0) {
 }
 
 if (undocumented.length > 0) {
-  console.error(`Undocumented tools (in code but not in docs/tools.md):\n  ${undocumented.join("\n  ")}`);
+  console.error(
+    `Undocumented tools (in code but not in docs/tools.md):\n  ${undocumented.join("\n  ")}`,
+  );
 }
 if (stale.length > 0) {
   console.error(`Stale docs (in docs/tools.md but not in code):\n  ${stale.join("\n  ")}`);
