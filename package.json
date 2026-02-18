@@ -13,12 +13,14 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "check:structure": "bun run scripts/check-structure.ts"
+    "check:structure": "bun run scripts/check-structure.ts",
+    "knip": "knip"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",
     "@types/bun": "latest",
-    "@types/qrcode-terminal": "^0.12.2"
+    "@types/qrcode-terminal": "^0.12.2",
+    "knip": "^5.84.1"
   },
   "peerDependencies": {
     "typescript": "^5"
