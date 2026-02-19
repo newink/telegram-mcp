@@ -77,14 +77,14 @@ bun install
 cp .env.example .env
 # Fill in TELEGRAM_API_ID and TELEGRAM_API_HASH
 
-bun auth
+bun run auth
 # Logs in via QR code or phone number, saves session to .env
 ```
 
 ### 3. Start the server
 
 ```bash
-bun dev
+bun start
 # MCP server running at http://localhost:3000/mcp
 ```
 
@@ -96,19 +96,14 @@ That's it. Point your MCP client at `http://localhost:3000/mcp`.
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Start the server first (`bun start`), then add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "telegram": {
-      "command": "bun",
-      "args": ["run", "/path/to/telegram-mcp/src/index.ts"],
-      "env": {
-        "TELEGRAM_API_ID": "your_id",
-        "TELEGRAM_API_HASH": "your_hash",
-        "TELEGRAM_SESSION": "your_session"
-      }
+      "type": "http",
+      "url": "http://localhost:3000/mcp"
     }
   }
 }
@@ -180,16 +175,6 @@ bun run audit        # Full health check (types + lint + structure + TODOs)
 Project structure and architecture → [docs/architecture.md](docs/architecture.md)
 MTProto specifics and gotchas → [docs/mtproto.md](docs/mtproto.md)
 Adding new tools → [docs/tools.md](docs/tools.md)
-
----
-
-## Roadmap
-
-- [ ] `search_messages` — full-text search across chats
-- [ ] `send_message` — write operations with allowlist guard
-- [ ] Bearer token authentication for the HTTP endpoint
-- [ ] Channel monitoring mode
-- [ ] Docker image
 
 ---
 
