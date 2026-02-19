@@ -133,19 +133,6 @@ curl -X POST http://localhost:3000/mcp \
 
 ---
 
-## Mock Mode (no real Telegram needed)
-
-For development and testing, run without a real Telegram account:
-
-```bash
-TELEGRAM_MOCK=true bun dev   # server with fake data
-TELEGRAM_MOCK=true bun test  # run tests
-```
-
-Mock data includes sample dialogs, messages, and media — enough to develop and test new tools without touching the real API.
-
----
-
 ## Environment Variables
 
 | Variable | Required | Description |
@@ -171,6 +158,15 @@ bun run lint:fix     # Auto-fix lint issues
 bun run knip         # Find dead code
 bun run audit        # Full health check (types + lint + structure + TODOs)
 ```
+
+**Mock mode** — develop and test without a real Telegram account:
+
+```bash
+TELEGRAM_MOCK=true bun dev   # server with fake data
+TELEGRAM_MOCK=true bun test  # run tests
+```
+
+Mock data includes sample dialogs, messages, and media — enough to build and test new tools without touching the real API.
 
 Project structure and architecture → [docs/architecture.md](docs/architecture.md)
 MTProto specifics and gotchas → [docs/mtproto.md](docs/mtproto.md)
