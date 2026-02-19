@@ -81,10 +81,9 @@ bun run lint:fix      # Biome auto-fix
 - `media_download` — Download media from a message
 - `message_from_link` — Fetch message by t.me link
 
-## Roadmap (RFC-001)
+## Planned Tools
 
 - [ ] `search_messages` — Full-text search across chats
 - [ ] `get_unread` — Unread messages summary
 - [ ] `send_message` / `forward_message` — Write operations
 - [ ] Channel monitoring daemon
-- [ ] LifeOS inbox integration
