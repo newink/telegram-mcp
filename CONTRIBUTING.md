@@ -49,6 +49,16 @@ See [docs/tools.md](docs/tools.md) for the existing tool format.
 - Parse at boundaries — use Zod schemas for all tool inputs
 - bigint → string — always use `jsonResponse()` helper for Telegram IDs
 
+## CI Secrets (for maintainers)
+
+The Docker publish workflow requires these secrets in GitHub repo settings:
+
+| Secret | Description |
+|--------|-------------|
+| `DOCKERHUB_USERNAME` | Docker Hub username (`newink`) |
+| `DOCKERHUB_TOKEN` | Docker Hub access token — create at https://hub.docker.com/settings/security |
+| `GITHUB_TOKEN` | Auto-provided by GitHub Actions, no setup needed |
+
 ## Commit Messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):

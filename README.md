@@ -11,6 +11,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-6366f1)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-22c55e)](src/smoke.test.ts)
+[![Docker](https://img.shields.io/docker/pulls/newink/telegram-mcp)](https://hub.docker.com/r/newink/telegram-mcp)
 
 </div>
 
@@ -108,6 +109,48 @@ bun start
 ```
 
 Both flows produce the same result — pick whichever fits your setup.
+
+---
+
+## Docker
+
+Run with Docker Compose — no Bun installation needed:
+
+```bash
+cp .env.example .env
+# Fill in TELEGRAM_API_ID and TELEGRAM_API_HASH
+
+docker compose up
+```
+
+The first time you start the container without a `TELEGRAM_SESSION`, it will print an auth URL — open it in your browser to sign in. The session is persisted to `./bot-data/` so you only need to auth once.
+
+<details>
+<summary>Manual docker run</summary>
+
+```bash
+docker build -t telegram-mcp .
+
+docker run -p 3000:3000 \
+  --env-file .env \
+  -e ENV_FILE=/app/bot-data/.env \
+  -v ./bot-data:/app/bot-data \
+  telegram-mcp
+```
+
+</details>
+
+### Pull pre-built image
+
+```bash
+# Latest stable
+docker pull newink/telegram-mcp
+
+# Or from GitHub Container Registry
+docker pull ghcr.io/newink/telegram-mcp
+```
+
+Supported platforms: `linux/amd64`, `linux/arm64` (Raspberry Pi, Apple Silicon via Rosetta).
 
 ---
 
