@@ -11,6 +11,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-6366f1)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-22c55e)](src/smoke.test.ts)
+[![Docker](https://img.shields.io/docker/pulls/newink/telegram-mcp)](https://hub.docker.com/r/newink/telegram-mcp)
 
 </div>
 
@@ -138,6 +139,18 @@ docker run -p 3000:3000 \
 ```
 
 </details>
+
+### Pull pre-built image
+
+```bash
+# Latest stable
+docker pull newink/telegram-mcp
+
+# Or from GitHub Container Registry
+docker pull ghcr.io/newink/telegram-mcp
+```
+
+Supported platforms: `linux/amd64`, `linux/arm64` (Raspberry Pi, Apple Silicon via Rosetta).
 
 ---
 
