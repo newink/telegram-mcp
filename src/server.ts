@@ -187,6 +187,46 @@ function registerTools(server: McpServer) {
   );
 
   server.tool(
+    "search_messages",
+    "Search messages by text query. Searches globally or within a specific chat.",
+    {
+      query: z.string().min(1).describe("Search text"),
+      chatId: z.string().optional().describe("Scope to specific chat (numeric ID or @username)"),
+      limit: z.number().int().positive().default(20).describe("Max messages"),
+      minDate: z.string().optional().describe("Only messages after this ISO date"),
+      maxDate: z.string().optional().describe("Only messages before this ISO date"),
+    },
+    async ({ query, chatId: rawChatId, limit, minDate, maxDate }) => {
+      const tg = await getTelegramClient();
+      const chatId = rawChatId ? parseChatId(rawChatId) : undefined;
+      const parsedMinDate = parseIsoDate(minDate, "minDate");
+      const parsedMaxDate = parseIsoDate(maxDate, "maxDate");
+
+      if (parsedMinDate && parsedMaxDate && parsedMinDate.getTime() > parsedMaxDate.getTime()) {
+        throw new Error("Invalid date range: minDate must be <= maxDate");
+      }
+
+      const messages: ReturnType<typeof formatMessage>[] = [];
+      for await (const msg of tg.iterSearchMessages({
+        chatId,
+        query,
+        minDate: parsedMinDate,
+        maxDate: parsedMaxDate,
+        limit,
+      })) {
+        messages.push(formatMessage(msg));
+      }
+
+      return jsonResponse({
+        query,
+        chatId: chatId ?? null,
+        count: messages.length,
+        messages,
+      });
+    },
+  );
+
+  server.tool(
     "media_download",
     "Download media (photo, video, document, etc.) from a specific message to a local file. Requires the chat ID and message ID.",
     {
