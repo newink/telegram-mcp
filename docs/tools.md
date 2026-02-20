@@ -39,6 +39,27 @@ Get messages from a chat with optional filtering.
 
 **Returns:** `{ chatId, mode, limit, filters, count, messages: [{ id, date, sender, chat, text, mediaType }] }`
 
+## search_messages
+
+Search messages by text query. Searches globally or within a specific chat.
+
+**Parameters:**
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| query | string | yes | — | Search text (min 1 char) |
+| chatId | string | no | — | Scope to specific chat (numeric ID or @username) |
+| limit | number | no | 20 | Max messages |
+| minDate | string | no | — | ISO date, messages after |
+| maxDate | string | no | — | ISO date, messages before |
+
+**Returns:** `{ query, chatId, count, messages: [{ id, date, sender, chat, text, mediaType }] }`
+
+**Example:**
+```bash
+curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_messages","arguments":{"query":"meeting","chatId":"100001"}}}'
+```
+
 ## media_download
 
 Download media from a message to a local file.
