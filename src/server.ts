@@ -416,7 +416,9 @@ export async function startServer() {
     }
   } else {
     if (!process.env.TELEGRAM_API_ID || !process.env.TELEGRAM_API_HASH) {
-      log.warn("TELEGRAM_API_ID and TELEGRAM_API_HASH are not set — add them to .env before authenticating");
+      log.warn(
+        "TELEGRAM_API_ID and TELEGRAM_API_HASH are not set — add them to .env before authenticating",
+      );
     }
     const token = generateSetupToken();
     log.warn(
