@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
+import { log } from "./logger.ts";
 import { getTelegramClient } from "./telegram.ts";
 
 function createMcpServer() {
@@ -313,8 +314,14 @@ export async function startServer() {
     async fetch(req) {
       const url = new URL(req.url);
 
-      console.log(
-        `[${req.method}] ${url.pathname} Accept: ${req.headers.get("accept")} Session: ${req.headers.get("mcp-session-id") ?? "none"}`,
+      log.info(
+        {
+          method: req.method,
+          path: url.pathname,
+          accept: req.headers.get("accept"),
+          session: req.headers.get("mcp-session-id") ?? "none",
+        },
+        "incoming request",
       );
 
       if (url.pathname !== "/mcp") {
@@ -372,13 +379,13 @@ export async function startServer() {
     },
   });
 
-  console.log(`MCP Telegram server listening on http://localhost:${port}/mcp`);
+  log.info({ port }, "mcp telegram server listening");
 
   // Connect to Telegram eagerly so errors surface at startup
   try {
     await getTelegramClient();
   } catch (err) {
-    console.error("Failed to connect to Telegram:", err);
+    log.error({ err }, "failed to connect to telegram");
     process.exit(1);
   }
 
@@ -388,7 +395,7 @@ export async function startServer() {
       try {
         await transport.close();
       } catch (err) {
-        console.error(`Error closing session ${sid}:`, err);
+        log.error({ err, sid }, "error closing session");
       }
     }
     process.exit(0);

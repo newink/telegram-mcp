@@ -1,6 +1,7 @@
+import { log } from "./logger.ts";
 import { startServer } from "./server.ts";
 
 startServer().catch((err) => {
-  console.error("Fatal error:", err);
+  log.fatal({ err }, "fatal error");
   process.exit(1);
 });

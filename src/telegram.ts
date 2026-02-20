@@ -1,4 +1,5 @@
 import { TelegramClient } from "@mtcute/bun";
+import { log } from "./logger.ts";
 
 let client: TelegramClient | null = null;
 
@@ -10,7 +11,7 @@ export async function getTelegramClient(): Promise<TelegramClient> {
     const { createMockClient } = await import("./mock/client.ts");
     const mockClient = createMockClient() as unknown as TelegramClient;
     client = mockClient;
-    console.log("Using mock Telegram client");
+    log.info("using mock telegram client");
     return client;
   }
 
@@ -35,12 +36,12 @@ export async function getTelegramClient(): Promise<TelegramClient> {
     disableUpdates: true,
   });
 
-  console.log("Importing Telegram session...");
+  log.info("importing telegram session");
   await client.importSession(session);
 
-  console.log("Connecting to Telegram...");
+  log.info("connecting to telegram");
   await client.connect();
-  console.log("Connected to Telegram.");
+  log.info("connected to telegram");
 
   return client;
 }
