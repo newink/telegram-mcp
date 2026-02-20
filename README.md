@@ -111,6 +111,36 @@ Both flows produce the same result — pick whichever fits your setup.
 
 ---
 
+## Docker
+
+Run with Docker Compose — no Bun installation needed:
+
+```bash
+cp .env.example .env
+# Fill in TELEGRAM_API_ID and TELEGRAM_API_HASH
+
+docker compose up
+```
+
+The first time you start the container without a `TELEGRAM_SESSION`, it will print an auth URL — open it in your browser to sign in. The session is persisted to `./bot-data/` so you only need to auth once.
+
+<details>
+<summary>Manual docker run</summary>
+
+```bash
+docker build -t telegram-mcp .
+
+docker run -p 3000:3000 \
+  --env-file .env \
+  -e ENV_FILE=/app/bot-data/.env \
+  -v ./bot-data:/app/bot-data \
+  telegram-mcp
+```
+
+</details>
+
+---
+
 ## Connect to Your AI Client
 
 ### Claude Desktop

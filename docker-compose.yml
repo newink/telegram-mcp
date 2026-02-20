@@ -1,0 +1,11 @@
+services:
+  telegram-mcp:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      - ENV_FILE=/app/bot-data/.env
+    volumes:
+      - ./bot-data:/app/bot-data
+    restart: unless-stopped

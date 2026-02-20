@@ -1,11 +1,15 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
+function envPath(): string {
+  return process.env.ENV_FILE ?? ".env";
+}
+
 export function loadEnv(): Record<string, string> {
-  const envPath = ".env";
+  const path = envPath();
   const entries: Record<string, string> = {};
 
-  if (existsSync(envPath)) {
-    for (const line of readFileSync(envPath, "utf-8").split("\n")) {
+  if (existsSync(path)) {
+    for (const line of readFileSync(path, "utf-8").split("\n")) {
       const match = line.match(/^([^#=]+)=(.*)$/);
       if (match) entries[match[1]!.trim()] = match[2]?.trim() ?? "";
     }
@@ -16,5 +20,5 @@ export function loadEnv(): Record<string, string> {
 
 export function saveEnv(entries: Record<string, string>) {
   const lines = Object.entries(entries).map(([k, v]) => `${k}=${v}`);
-  writeFileSync(".env", `${lines.join("\n")}\n`);
+  writeFileSync(envPath(), `${lines.join("\n")}\n`);
 }

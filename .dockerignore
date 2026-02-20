@@ -1,0 +1,10 @@
+.env
+.env.*
+bot-data/
+node_modules/
+.git/
+.github/
+docs/
+*.md
+scripts/
+src/**/*.test.ts

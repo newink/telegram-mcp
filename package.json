@@ -15,7 +15,9 @@
     "lint:fix": "biome check --write .",
     "check:structure": "bun run scripts/check-structure.ts",
     "knip": "knip",
-    "audit": "bun run scripts/audit.ts"
+    "audit": "bun run scripts/audit.ts",
+    "docker:build": "docker build -t telegram-mcp .",
+    "docker:run": "docker compose up"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",
