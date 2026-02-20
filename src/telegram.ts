@@ -3,6 +3,11 @@ import { log } from "./logger.ts";
 
 let client: TelegramClient | null = null;
 
+export function isSessionConfigured(): boolean {
+  if (process.env.TELEGRAM_MOCK === "true") return true;
+  return Boolean(process.env.TELEGRAM_SESSION);
+}
+
 export async function getTelegramClient(): Promise<TelegramClient> {
   if (client) return client;
 
