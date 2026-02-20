@@ -4,7 +4,15 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
 import { log } from "./logger.ts";
-import { getTelegramClient } from "./telegram.ts";
+import { getTelegramClient, isSessionConfigured } from "./telegram.ts";
+import {
+  generateSetupToken,
+  handleAuthCode,
+  handleAuthPage,
+  handleAuthPassword,
+  handleAuthStart,
+  handleAuthStatus,
+} from "./web-auth.ts";
 
 function createMcpServer() {
   const server = new McpServer({
@@ -324,6 +332,23 @@ export async function startServer() {
         "incoming request",
       );
 
+      // --- Auth routes ---
+      if (url.pathname === "/auth" && req.method === "GET") {
+        return handleAuthPage(url);
+      }
+      if (url.pathname === "/auth/status" && req.method === "GET") {
+        return handleAuthStatus(req, url);
+      }
+      if (url.pathname === "/auth/start" && req.method === "POST") {
+        return handleAuthStart(req, url);
+      }
+      if (url.pathname === "/auth/code" && req.method === "POST") {
+        return handleAuthCode(req, url);
+      }
+      if (url.pathname === "/auth/password" && req.method === "POST") {
+        return handleAuthPassword(req, url);
+      }
+
       if (url.pathname !== "/mcp") {
         return new Response("Not Found", { status: 404 });
       }
@@ -381,12 +406,23 @@ export async function startServer() {
 
   log.info({ port }, "mcp telegram server listening");
 
-  // Connect to Telegram eagerly so errors surface at startup
-  try {
-    await getTelegramClient();
-  } catch (err) {
-    log.error({ err }, "failed to connect to telegram");
-    process.exit(1);
+  // Connect to Telegram eagerly if session is configured, otherwise offer web auth
+  if (isSessionConfigured()) {
+    try {
+      await getTelegramClient();
+    } catch (err) {
+      log.error({ err }, "failed to connect to telegram");
+      process.exit(1);
+    }
+  } else {
+    if (!process.env.TELEGRAM_API_ID || !process.env.TELEGRAM_API_HASH) {
+      log.warn("TELEGRAM_API_ID and TELEGRAM_API_HASH are not set — add them to .env before authenticating");
+    }
+    const token = generateSetupToken();
+    log.warn(
+      { url: `http://localhost:${port}/auth?token=${token}` },
+      "auth required — open URL to connect Telegram account",
+    );
   }
 
   // Graceful shutdown: close all sessions
