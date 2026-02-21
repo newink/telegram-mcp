@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
+import { isChatAllowed, loadConfig } from "./config.ts";
 import { log } from "./logger.ts";
 import { getTelegramClient, isSessionConfigured } from "./telegram.ts";
 import {
@@ -297,6 +298,38 @@ function registerTools(server: McpServer) {
       });
     },
   );
+
+  server.tool(
+    "delete_messages",
+    "Delete messages from a Telegram chat. Requires explicit opt-in via bot-data/config.yml.",
+    {
+      chatId: z.string().describe("Numeric chat ID (as string) or @username"),
+      messageIds: z.array(z.number().int().positive()).min(1).describe("Message IDs to delete"),
+      revoke: z
+        .boolean()
+        .default(false)
+        .describe("Delete for all participants (not just yourself)"),
+    },
+    async ({ chatId: rawChatId, messageIds, revoke }) => {
+      if (!isChatAllowed("delete_messages", rawChatId)) {
+        throw new Error(
+          `delete_messages is not allowed for chat "${rawChatId}". ` +
+            "Check bot-data/config.yml to add it to allowed_chats.",
+        );
+      }
+
+      const chatId = parseChatId(rawChatId);
+      const tg = await getTelegramClient();
+      await tg.deleteMessagesById(chatId, messageIds, { revoke });
+
+      return jsonResponse({
+        chatId,
+        deletedCount: messageIds.length,
+        messageIds,
+        revoke,
+      });
+    },
+  );
 }
 
 interface Session {
@@ -315,6 +348,14 @@ function jsonRpcError(code: number, message: string, status: number) {
 
 export async function startServer() {
   const port = parseInt(process.env.PORT || "3000", 10);
+
+  // Load and validate config early — fail fast at startup
+  try {
+    loadConfig();
+  } catch (err) {
+    log.error({ err }, "config error");
+    process.exit(1);
+  }
 
   // @ts-expect-error: Bun types require `routes` but fetch-only mode works at runtime
   Bun.serve({

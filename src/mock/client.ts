@@ -126,6 +126,15 @@ export function createMockClient() {
       return null;
     },
 
+    async deleteMessagesById(
+      _chatId: string | number,
+      messageIds: number[],
+      _opts?: { revoke?: boolean },
+    ) {
+      // no-op in mock — just return successfully
+      return messageIds;
+    },
+
     // Stub for connect/importSession used in telegram.ts
     async connect() {},
     async importSession(_session: string) {},

@@ -1,0 +1,16 @@
+# telegram-mcp configuration
+# Copy to bot-data/config.yml and adjust.
+# Restart the server after changes.
+
+tools:
+  delete_messages:
+    enabled: true
+    allowed_chats:
+      - "me"          # Saved Messages (always safe to allow)
+      # - "123456789" # Add numeric chat IDs as needed
+      # - "@username"  # Or @usernames
+
+  # send_message:    # Uncomment when implemented
+  #   enabled: false
+  #   allowed_chats:
+  #     - "me"
