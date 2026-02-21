@@ -74,7 +74,7 @@ function formatMessage(msg: Message) {
 }
 
 function parseChatId(chatId: string): string | number {
-  return /^\d+$/.test(chatId) ? Number(chatId) : chatId;
+  return /^-?\d+$/.test(chatId) ? Number(chatId) : chatId;
 }
 
 function registerTools(server: McpServer) {
