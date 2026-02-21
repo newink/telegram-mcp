@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-## Configuration
+### Configuration
 
 Write tools (e.g. `delete_messages`) require explicit opt-in via `bot-data/config.yml`.
 See `bot-data/config.example.yml` for the full schema.
