@@ -97,15 +97,24 @@ Fetch a message by its Telegram link.
 
 ## delete_messages
 
-Delete messages from a chat. Requires config opt-in.
+Delete one or more messages from a chat. Write tool — requires config opt-in.
 
 **Parameters:**
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| chatId | string | yes | — | Numeric ID or @username |
-| messageIds | number[] | yes | — | Message IDs to delete |
-| revoke | boolean | no | true | Delete for all participants |
+| chatId | string | yes | — | Numeric ID, @username, or "me" |
+| messageIds | number[] | yes | — | IDs to delete (min 1, supports bulk) |
+| revoke | boolean | no | true | Delete for everyone (true) or self only (false) |
 
 **Returns:** `{ chatId, deletedCount, messageIds, revoke }`
 
-**Config required:** Must be enabled in `bot-data/config.yml` with the target chat in `allowed_chats`. Throws an error if not configured.
+**Config required:**
+```yaml
+tools:
+  delete_messages:
+    enabled: true
+    allowed_chats:
+      - "me"
+```
+
+Throws if chat not in `allowed_chats`. No error if message IDs don't exist (Telegram ignores them).
