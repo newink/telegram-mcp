@@ -22,7 +22,7 @@ const ConfigSchema = z.object({
   tools: z.record(z.string(), ToolConfigSchema).default({}),
 });
 
-export type Config = z.infer<typeof ConfigSchema>;
+type Config = z.infer<typeof ConfigSchema>;
 
 // --- Singleton ---
 
@@ -82,7 +82,7 @@ export function loadConfig(): Config {
   return _config;
 }
 
-export function getConfig(): Config {
+function getConfig(): Config {
   if (!_config) {
     _config = loadConfig();
   }
@@ -98,7 +98,7 @@ export function resetConfig(): void {
  * Returns true if a write tool is explicitly enabled in config.
  * Tool not mentioned or enabled: false → returns false.
  */
-export function isToolEnabled(toolName: string): boolean {
+function isToolEnabled(toolName: string): boolean {
   return getConfig().tools[toolName]?.enabled === true;
 }
 

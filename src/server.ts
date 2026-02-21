@@ -301,20 +301,28 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "delete_messages",
-    "Delete messages from a Telegram chat. Requires explicit opt-in via bot-data/config.yml.",
+    "Delete messages from a Telegram chat. Requires explicit opt-in in bot-data/config.yml.",
     {
-      chatId: z.string().describe("Numeric chat ID (as string) or @username"),
-      messageIds: z.array(z.number().int().positive()).min(1).describe("Message IDs to delete"),
+      chatId: z
+        .string()
+        .describe('Numeric chat ID (as string), @username, or "me" for Saved Messages'),
+      messageIds: z
+        .array(z.number().int().positive())
+        .min(1)
+        .describe("Message IDs to delete. Pass multiple to bulk-delete in one call."),
       revoke: z
         .boolean()
         .default(true)
-        .describe("Delete for all participants (not just yourself)"),
+        .describe(
+          "Delete for all participants (true) or only for yourself (false). Default: true.",
+        ),
     },
     async ({ chatId: rawChatId, messageIds, revoke }) => {
       if (!isChatAllowed("delete_messages", rawChatId)) {
+        const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
         throw new Error(
           `delete_messages is not allowed for chat "${rawChatId}". ` +
-            "Check bot-data/config.yml to add it to allowed_chats.",
+            `Add it to allowed_chats in ${configPath}.`,
         );
       }
 

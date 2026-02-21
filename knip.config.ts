@@ -1,7 +1,7 @@
 import type { KnipConfig } from "knip";
 
 const config: KnipConfig = {
-  entry: ["scripts/*.ts"],
+  entry: ["scripts/*.ts", "src/*.test.ts"],
   project: ["src/**/*.ts"],
   ignoreBinaries: [
     // tsc comes from typescript which is listed as a peerDependency

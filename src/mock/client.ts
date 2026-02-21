@@ -128,7 +128,7 @@ export function createMockClient() {
 
     async deleteMessagesById(
       _chatId: string | number,
-      messageIds: number[],
+      _messageIds: number[],
       _opts?: { revoke?: boolean },
     ) {
       // no-op in mock
