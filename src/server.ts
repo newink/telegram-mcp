@@ -307,7 +307,7 @@ function registerTools(server: McpServer) {
       messageIds: z.array(z.number().int().positive()).min(1).describe("Message IDs to delete"),
       revoke: z
         .boolean()
-        .default(false)
+        .default(true)
         .describe("Delete for all participants (not just yourself)"),
     },
     async ({ chatId: rawChatId, messageIds, revoke }) => {

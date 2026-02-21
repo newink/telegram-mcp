@@ -67,6 +67,17 @@ export function loadConfig(): Config {
   }
 
   _config = result.data;
+
+  // Warn loudly if any tool uses wildcard outside mock mode
+  for (const [toolName, toolConfig] of Object.entries(_config.tools)) {
+    if (toolConfig.allowed_chats?.includes("*")) {
+      log.warn(
+        { tool: toolName },
+        '⚠️  allowed_chats contains "*" — ALL chats are allowed for this tool. This disables the allowlist entirely. Remove "*" and list specific chats for production use.',
+      );
+    }
+  }
+
   log.info({ tools: Object.keys(_config.tools) }, "config loaded");
   return _config;
 }

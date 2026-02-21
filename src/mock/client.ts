@@ -131,8 +131,7 @@ export function createMockClient() {
       messageIds: number[],
       _opts?: { revoke?: boolean },
     ) {
-      // no-op in mock — just return successfully
-      return messageIds;
+      // no-op in mock
     },
 
     // Stub for connect/importSession used in telegram.ts

@@ -104,7 +104,7 @@ Delete messages from a chat. Requires config opt-in.
 |------|------|----------|---------|-------------|
 | chatId | string | yes | — | Numeric ID or @username |
 | messageIds | number[] | yes | — | Message IDs to delete |
-| revoke | boolean | no | false | Delete for all participants |
+| revoke | boolean | no | true | Delete for all participants |
 
 **Returns:** `{ chatId, deletedCount, messageIds, revoke }`
 

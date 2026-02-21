@@ -9,6 +9,7 @@ tools:
       - "me"          # Saved Messages (always safe to allow)
       # - "123456789" # Add numeric chat IDs as needed
       # - "@username"  # Or @usernames
+      # - "*"         # WARNING: wildcard — allows ALL chats, disables allowlist
 
   # send_message:    # Uncomment when implemented
   #   enabled: false
