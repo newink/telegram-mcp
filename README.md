@@ -55,8 +55,10 @@ Download files, images, or documents from any message your agent finds — usefu
 |------|-------------|
 | `search_dialogs` | Search chats, groups, and channels by name or username |
 | `get_messages` | Fetch messages with date range, unread filter, and mark-as-read support |
-| `media_download` | Download media from any message to a local file |
+| `search_messages` | Full-text search across all chats or within a specific chat |
+| `media_download` | Download media (photo, video, document) from a message to a local file |
 | `message_from_link` | Fetch a message by its `t.me/...` link |
+| `delete_messages` | Delete messages from a chat (requires opt-in via `bot-data/config.yml`) |
 
 Full reference with parameters and examples → [docs/tools.md](docs/tools.md)
 
