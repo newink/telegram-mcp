@@ -1,5 +1,14 @@
 # MCP Tools Reference
 
+## Configuration
+
+Write tools (e.g. `delete_messages`) require explicit opt-in via `bot-data/config.yml`.
+See `bot-data/config.example.yml` for the full schema.
+
+If no config file is present, all write tools are disabled.
+
+---
+
 ## search_dialogs
 
 Search Telegram dialogs by display name or username.
@@ -85,3 +94,18 @@ Fetch a message by its Telegram link.
 | link | string | yes | t.me link (e.g. `https://t.me/channel/123`) |
 
 **Returns:** `{ link, found, message? }`
+
+## delete_messages
+
+Delete messages from a chat. Requires config opt-in.
+
+**Parameters:**
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| chatId | string | yes | — | Numeric ID or @username |
+| messageIds | number[] | yes | — | Message IDs to delete |
+| revoke | boolean | no | true | Delete for all participants |
+
+**Returns:** `{ chatId, deletedCount, messageIds, revoke }`
+
+**Config required:** Must be enabled in `bot-data/config.yml` with the target chat in `allowed_chats`. Throws an error if not configured.

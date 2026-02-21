@@ -28,6 +28,7 @@ TELEGRAM_MOCK=true bun test         # run tests
 4. **Tools are atomic.** One tool = one operation. No combined "search and send" tools.
 5. **bigint → string.** Telegram IDs are bigint. JSON can't serialize bigint. Always use `jsonResponse()` helper.
 6. **Tests without real Telegram.** Use `TELEGRAM_MOCK=true`. Never call real API in tests.
+7. **Write tools require config.** `delete_messages` and future write tools check `bot-data/config.yml` at each call. No config = disabled. See `src/config.ts`.
 
 ## Project Structure
 
@@ -36,6 +37,7 @@ src/
 ├── index.ts           # Entry point
 ├── server.ts          # MCP server, HTTP transport, tool registration
 ├── telegram.ts        # TelegramClient singleton (real or mock)
+├── config.ts          # YAML config loader, write-tool restrictions
 ├── auth.ts            # QR-code auth flow
 └── mock/
     ├── client.ts      # Mock TelegramClient implementation
@@ -78,12 +80,13 @@ bun run lint:fix      # Biome auto-fix
 
 - `search_dialogs` — Search dialogs by name/username
 - `get_messages` — Get messages with date/unread filtering
+- `search_messages` — Full-text search across chats
 - `media_download` — Download media from a message
 - `message_from_link` — Fetch message by t.me link
+- `delete_messages` — Delete messages (requires config opt-in)
 
 ## Planned Tools
 
-- [ ] `search_messages` — Full-text search across chats
 - [ ] `get_unread` — Unread messages summary
 - [ ] `send_message` / `forward_message` — Write operations
 - [ ] Channel monitoring daemon
