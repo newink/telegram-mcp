@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { isChatAllowed, isToolEnabled, loadConfig, resetConfig } from "./config.ts";
+import { isChatAllowed, loadConfig, resetConfig } from "./config.ts";
 
 const TEST_CONFIG_DIR = "bot-data";
 const TEST_CONFIG_PATH = `${TEST_CONFIG_DIR}/config.test.yml`;
@@ -76,42 +76,6 @@ tools:
     const config = loadConfig();
     expect(config.tools.delete_messages?.enabled).toBe(true);
     expect(config.tools.delete_messages?.allowed_chats).toContain("*");
-  });
-});
-
-describe("isToolEnabled", () => {
-  it("returns false when tool not in config", () => {
-    writeFileSync(TEST_CONFIG_PATH, "tools: {}");
-    loadConfig();
-    expect(isToolEnabled("delete_messages")).toBe(false);
-  });
-
-  it("returns false when enabled is false", () => {
-    writeFileSync(
-      TEST_CONFIG_PATH,
-      `
-tools:
-  delete_messages:
-    enabled: false
-`,
-    );
-    loadConfig();
-    expect(isToolEnabled("delete_messages")).toBe(false);
-  });
-
-  it("returns true when enabled is true", () => {
-    writeFileSync(
-      TEST_CONFIG_PATH,
-      `
-tools:
-  delete_messages:
-    enabled: true
-    allowed_chats:
-      - "me"
-`,
-    );
-    loadConfig();
-    expect(isToolEnabled("delete_messages")).toBe(true);
   });
 });
 
