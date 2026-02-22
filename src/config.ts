@@ -37,6 +37,10 @@ export function loadConfig(): Config {
           enabled: true,
           allowed_chats: ["*"],
         },
+        send_messages: {
+          enabled: true,
+          allowed_chats: ["*"],
+        }
       },
     };
     _config = config;

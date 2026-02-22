@@ -338,6 +338,33 @@ function registerTools(server: McpServer) {
       });
     },
   );
+  server.tool(
+    "send_message",
+    "Send a text message to a Telegram chat. Requires explicit opt-in in bot-data/config.yml.",
+    {
+      chatId: z.string().describe("Numeric chat ID (as string) or @username"),
+      text: z.string().min(1).describe("Text of the message to send"),
+    },
+    async ({ chatId: rawChatId, text }) => {
+      if (!isChatAllowed("send_messages", rawChatId)) {
+        const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        throw new Error(
+          `send_messages is not allowed for chat "${rawChatId}". ` +
+            `Add it to allowed_chats in ${configPath}.`,
+        );
+      }
+
+      const chatId = parseChatId(rawChatId);
+      const tg = await getTelegramClient();
+      const msg = await tg.sendText(chatId, text);
+
+      return jsonResponse({
+        status: "sent",
+        chatId,
+        message: formatMessage(msg),
+      });
+    },
+  );
 }
 
 interface Session {

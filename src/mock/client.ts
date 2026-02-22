@@ -134,6 +134,24 @@ export function createMockClient() {
       // no-op in mock
     },
 
+    async sendText(chatId: string | number, text: string, _params?: unknown) {
+      const chat = findChat(chatId) || MOCK_CHATS[0] as MockChat; // fallback to first chat if not found
+      if (!chat) {
+          throw new Error("No mock chat available");
+      }
+      const msgId = Math.max(0, ...chat.messages.map((m) => m.id)) + 1;
+      const newMsg: MockMessage = {
+        id: msgId,
+        date: new Date(),
+        text,
+        senderName: "Me",
+      };
+      
+      // We don't actually mutate MOCK_CHATS here to keep tests deterministic,
+      // but we return a properly formatted mock message.
+      return toMockMessageObj(newMsg, chat);
+    },
+
     // Stub for connect/importSession used in telegram.ts
     async connect() {},
     async importSession(_session: string) {},
