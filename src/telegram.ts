@@ -8,6 +8,15 @@ export function isSessionConfigured(): boolean {
   return Boolean(process.env.TELEGRAM_SESSION);
 }
 
+export async function closeTelegramClient(): Promise<void> {
+  if (!client) return;
+  try {
+    await client.disconnect();
+  } finally {
+    client = null;
+  }
+}
+
 export async function getTelegramClient(): Promise<TelegramClient> {
   if (client) return client;
 

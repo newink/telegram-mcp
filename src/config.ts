@@ -18,19 +18,8 @@ const ToolConfigSchema = z.object({
   allowed_chats: z.array(z.string()).optional(),
 });
 
-const SessionConfigSchema = z.object({
-  ttl_minutes: z.number().int().positive().default(30),
-  cleanup_interval_minutes: z.number().int().positive().default(5),
-  max_sessions: z.number().int().positive().default(50),
-});
-
 const ConfigSchema = z.object({
   tools: z.record(z.string(), ToolConfigSchema).default({}),
-  session: SessionConfigSchema.default({
-    ttl_minutes: 30,
-    cleanup_interval_minutes: 5,
-    max_sessions: 50,
-  }),
 });
 
 type Config = z.infer<typeof ConfigSchema>;
@@ -135,11 +124,4 @@ export function isChatAllowed(toolName: string, chatId: string | number): boolea
 function normalizeChatId(id: string | number): string {
   const s = String(id).trim().toLowerCase();
   return s.startsWith("@") ? s.slice(1) : s;
-}
-
-/**
- * Returns session management config with defaults applied.
- */
-export function getSessionConfig() {
-  return getConfig().session;
 }
