@@ -343,9 +343,27 @@ function registerTools(server: McpServer) {
 interface Session {
   server: McpServer;
   transport: WebStandardStreamableHTTPServerTransport;
+  lastAccess: number;
 }
 
 const sessions = new Map<string, Session>();
+
+const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
+const MAX_SESSIONS = 50; // hard cap as a safety net
+
+function cleanupStaleSessions() {
+  const now = Date.now();
+  for (const [sid, session] of sessions) {
+    if (now - session.lastAccess > SESSION_TTL_MS) {
+      log.info({ sid, idleMs: now - session.lastAccess }, "closing stale session");
+      session.transport.close().catch((err) => log.error({ err, sid }, "error closing stale session"));
+      sessions.delete(sid);
+    }
+  }
+}
+
+setInterval(cleanupStaleSessions, SESSION_CLEANUP_INTERVAL_MS).unref();
 
 function jsonRpcError(code: number, message: string, status: number) {
   return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code, message }, id: null }), {
@@ -406,7 +424,9 @@ export async function startServer() {
 
       // Known session — route all methods (POST, GET, DELETE) to its transport
       if (sessionId && sessions.has(sessionId)) {
-        return sessions.get(sessionId)?.transport.handleRequest(req);
+        const session = sessions.get(sessionId)!;
+        session.lastAccess = Date.now();
+        return session.transport.handleRequest(req);
       }
 
       // Unknown session ID — stale or invalid
@@ -433,15 +453,32 @@ export async function startServer() {
       }
 
       // --- New session ---
+      // Hard cap: evict oldest session if at limit
+      if (sessions.size >= MAX_SESSIONS) {
+        const oldest = [...sessions.entries()].sort((a, b) => a[1].lastAccess - b[1].lastAccess)[0];
+        if (oldest) {
+          const [sid, session] = oldest;
+          log.warn({ sid, size: sessions.size }, "session limit reached, evicting oldest");
+          session.transport.close().catch((err) => log.error({ err, sid }, "error evicting session"));
+          sessions.delete(sid);
+        }
+      }
+
       const server = createMcpServer();
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: () => crypto.randomUUID(),
         enableJsonResponse: true,
         onsessioninitialized: (sid) => {
-          sessions.set(sid, { server, transport });
+          sessions.set(sid, { server, transport, lastAccess: Date.now() });
+          log.info({ sid, total: sessions.size }, "session created");
+        },
+        onsessionclosed: (sid) => {
+          sessions.delete(sid);
+          log.info({ sid, remaining: sessions.size }, "session closed");
         },
       });
 
+      // Fallback: onclose fires when transport.close() is called explicitly
       transport.onclose = () => {
         if (transport.sessionId) {
           sessions.delete(transport.sessionId);
@@ -477,7 +514,8 @@ export async function startServer() {
   }
 
   // Graceful shutdown: close all sessions
-  process.on("SIGINT", async () => {
+  async function shutdown() {
+    log.info({ sessions: sessions.size }, "shutting down, closing all sessions");
     for (const [sid, { transport }] of sessions) {
       try {
         await transport.close();
@@ -485,6 +523,10 @@ export async function startServer() {
         log.error({ err, sid }, "error closing session");
       }
     }
+    sessions.clear();
     process.exit(0);
-  });
+  }
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
