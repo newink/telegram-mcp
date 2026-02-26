@@ -4,7 +4,7 @@ import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
 import { isChatAllowed, loadConfig } from "./config.ts";
 import { log } from "./logger.ts";
-import { getTelegramClient, isSessionConfigured } from "./telegram.ts";
+import { closeTelegramClient, getTelegramClient, isSessionConfigured } from "./telegram.ts";
 import {
   generateSetupToken,
   handleAuthCode,
@@ -387,13 +387,25 @@ export async function startServer() {
 
       // Stateless: each request gets a fresh McpServer + transport.
       // The TelegramClient singleton is shared across all requests.
-      const server = createMcpServer();
-      const transport = new WebStandardStreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // stateless — no session IDs
-        enableJsonResponse: true,
-      });
-      await server.connect(transport);
-      return transport.handleRequest(req);
+      try {
+        const server = createMcpServer();
+        const transport = new WebStandardStreamableHTTPServerTransport({
+          sessionIdGenerator: undefined, // stateless — no session IDs
+          enableJsonResponse: true,
+        });
+        await server.connect(transport);
+        return transport.handleRequest(req);
+      } catch (err) {
+        log.error({ err }, "request handling error");
+        return new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            error: { code: -32603, message: "Internal error" },
+            id: null,
+          }),
+          { status: 500, headers: { "Content-Type": "application/json" } },
+        );
+      }
     },
   });
 
@@ -420,6 +432,12 @@ export async function startServer() {
     );
   }
 
-  process.on("SIGINT", () => process.exit(0));
-  process.on("SIGTERM", () => process.exit(0));
+  async function shutdown() {
+    log.info("shutting down");
+    await closeTelegramClient().catch((err) => log.error({ err }, "error closing telegram client"));
+    process.exit(0);
+  }
+
+  process.on("SIGINT", () => void shutdown());
+  process.on("SIGTERM", () => void shutdown());
 }
