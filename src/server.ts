@@ -385,7 +385,6 @@ export async function startServer() {
     process.exit(1);
   }
 
-  // @ts-expect-error: Bun types require `routes` but fetch-only mode works at runtime
   Bun.serve({
     port,
     async fetch(req) {
