@@ -11,7 +11,7 @@ export function isSessionConfigured(): boolean {
 export async function closeTelegramClient(): Promise<void> {
   if (!client) return;
   try {
-    await client.close();
+    await client.disconnect();
   } finally {
     client = null;
   }
