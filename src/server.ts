@@ -357,7 +357,9 @@ function cleanupStaleSessions() {
   for (const [sid, session] of sessions) {
     if (now - session.lastAccess > SESSION_TTL_MS) {
       log.info({ sid, idleMs: now - session.lastAccess }, "closing stale session");
-      session.transport.close().catch((err) => log.error({ err, sid }, "error closing stale session"));
+      session.transport
+        .close()
+        .catch((err) => log.error({ err, sid }, "error closing stale session"));
       sessions.delete(sid);
     }
   }
@@ -459,7 +461,9 @@ export async function startServer() {
         if (oldest) {
           const [sid, session] = oldest;
           log.warn({ sid, size: sessions.size }, "session limit reached, evicting oldest");
-          session.transport.close().catch((err) => log.error({ err, sid }, "error evicting session"));
+          session.transport
+            .close()
+            .catch((err) => log.error({ err, sid }, "error evicting session"));
           sessions.delete(sid);
         }
       }
