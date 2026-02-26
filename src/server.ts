@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
-import { isChatAllowed, loadConfig } from "./config.ts";
+import { getSessionConfig, isChatAllowed, loadConfig } from "./config.ts";
 import { log } from "./logger.ts";
 import { getTelegramClient, isSessionConfigured } from "./telegram.ts";
 import {
@@ -343,9 +343,25 @@ function registerTools(server: McpServer) {
 interface Session {
   server: McpServer;
   transport: WebStandardStreamableHTTPServerTransport;
+  lastAccess: number;
 }
 
 const sessions = new Map<string, Session>();
+
+function cleanupStaleSessions() {
+  const { ttl_minutes } = getSessionConfig();
+  const ttlMs = ttl_minutes * 60 * 1000;
+  const now = Date.now();
+  for (const [sid, session] of sessions) {
+    if (now - session.lastAccess > ttlMs) {
+      log.info({ sid, idleMs: now - session.lastAccess }, "closing stale session");
+      session.transport
+        .close()
+        .catch((err) => log.error({ err, sid }, "error closing stale session"));
+      sessions.delete(sid);
+    }
+  }
+}
 
 function jsonRpcError(code: number, message: string, status: number) {
   return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code, message }, id: null }), {
@@ -365,7 +381,10 @@ export async function startServer() {
     process.exit(1);
   }
 
-  // @ts-expect-error: Bun types require `routes` but fetch-only mode works at runtime
+  const { cleanup_interval_minutes } = getSessionConfig();
+  setInterval(cleanupStaleSessions, cleanup_interval_minutes * 60 * 1000).unref();
+  log.info(getSessionConfig(), "session management config loaded");
+
   Bun.serve({
     port,
     async fetch(req) {
@@ -406,7 +425,9 @@ export async function startServer() {
 
       // Known session — route all methods (POST, GET, DELETE) to its transport
       if (sessionId && sessions.has(sessionId)) {
-        return sessions.get(sessionId)?.transport.handleRequest(req);
+        const session = sessions.get(sessionId)!;
+        session.lastAccess = Date.now();
+        return session.transport.handleRequest(req);
       }
 
       // Unknown session ID — stale or invalid
@@ -433,15 +454,35 @@ export async function startServer() {
       }
 
       // --- New session ---
+      // Hard cap: evict oldest session if at limit
+      const { max_sessions } = getSessionConfig();
+      if (sessions.size >= max_sessions) {
+        const oldest = [...sessions.entries()].sort((a, b) => a[1].lastAccess - b[1].lastAccess)[0];
+        if (oldest) {
+          const [sid, session] = oldest;
+          log.warn({ sid, size: sessions.size }, "session limit reached, evicting oldest");
+          session.transport
+            .close()
+            .catch((err) => log.error({ err, sid }, "error evicting session"));
+          sessions.delete(sid);
+        }
+      }
+
       const server = createMcpServer();
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: () => crypto.randomUUID(),
         enableJsonResponse: true,
         onsessioninitialized: (sid) => {
-          sessions.set(sid, { server, transport });
+          sessions.set(sid, { server, transport, lastAccess: Date.now() });
+          log.info({ sid, total: sessions.size }, "session created");
+        },
+        onsessionclosed: (sid) => {
+          sessions.delete(sid);
+          log.info({ sid, remaining: sessions.size }, "session closed");
         },
       });
 
+      // Fallback: onclose fires when transport.close() is called explicitly
       transport.onclose = () => {
         if (transport.sessionId) {
           sessions.delete(transport.sessionId);
@@ -477,7 +518,8 @@ export async function startServer() {
   }
 
   // Graceful shutdown: close all sessions
-  process.on("SIGINT", async () => {
+  async function shutdown() {
+    log.info({ sessions: sessions.size }, "shutting down, closing all sessions");
     for (const [sid, { transport }] of sessions) {
       try {
         await transport.close();
@@ -485,6 +527,10 @@ export async function startServer() {
         log.error({ err, sid }, "error closing session");
       }
     }
+    sessions.clear();
     process.exit(0);
-  });
+  }
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }

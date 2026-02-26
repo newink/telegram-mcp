@@ -2,6 +2,13 @@
 # Copy to bot-data/config.yml and adjust.
 # Restart the server after changes.
 
+# Session management
+# Controls memory usage — sessions accumulate if clients don't send DELETE /mcp.
+session:
+  ttl_minutes: 30              # evict sessions idle longer than this
+  cleanup_interval_minutes: 5  # how often to scan for stale sessions
+  max_sessions: 50             # hard cap; evicts oldest when exceeded
+
 tools:
   delete_messages:
     enabled: true
