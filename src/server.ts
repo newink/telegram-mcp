@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
-import { isChatAllowed, loadConfig } from "./config.ts";
+import { getSessionConfig, isChatAllowed, loadConfig } from "./config.ts";
 import { log } from "./logger.ts";
 import { getTelegramClient, isSessionConfigured } from "./telegram.ts";
 import {
@@ -348,14 +348,12 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 
-const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
-const MAX_SESSIONS = 50; // hard cap as a safety net
-
 function cleanupStaleSessions() {
+  const { ttl_minutes } = getSessionConfig();
+  const ttlMs = ttl_minutes * 60 * 1000;
   const now = Date.now();
   for (const [sid, session] of sessions) {
-    if (now - session.lastAccess > SESSION_TTL_MS) {
+    if (now - session.lastAccess > ttlMs) {
       log.info({ sid, idleMs: now - session.lastAccess }, "closing stale session");
       session.transport
         .close()
@@ -364,8 +362,6 @@ function cleanupStaleSessions() {
     }
   }
 }
-
-setInterval(cleanupStaleSessions, SESSION_CLEANUP_INTERVAL_MS).unref();
 
 function jsonRpcError(code: number, message: string, status: number) {
   return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code, message }, id: null }), {
@@ -384,6 +380,10 @@ export async function startServer() {
     log.error({ err }, "config error");
     process.exit(1);
   }
+
+  const { cleanup_interval_minutes } = getSessionConfig();
+  setInterval(cleanupStaleSessions, cleanup_interval_minutes * 60 * 1000).unref();
+  log.info(getSessionConfig(), "session management config loaded");
 
   Bun.serve({
     port,
@@ -455,7 +455,8 @@ export async function startServer() {
 
       // --- New session ---
       // Hard cap: evict oldest session if at limit
-      if (sessions.size >= MAX_SESSIONS) {
+      const { max_sessions } = getSessionConfig();
+      if (sessions.size >= max_sessions) {
         const oldest = [...sessions.entries()].sort((a, b) => a[1].lastAccess - b[1].lastAccess)[0];
         if (oldest) {
           const [sid, session] = oldest;
