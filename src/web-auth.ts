@@ -149,9 +149,11 @@ export async function handleAuthStart(req: Request, url: URL): Promise<Response>
 
   if (method === "qr") {
     // Start QR flow async — broadcasts via SSE, don't await
-    startQrFlow(authClient).catch((err) => {
+    startQrFlow(authClient).catch(async (err) => {
       log.error({ err }, "QR auth flow error");
       broadcastSSE({ type: "error", message: errorText(err) });
+      await cleanupAuthClient();
+      closeAllSSE();
     });
     return Response.json({ ok: true, method: "qr" });
   }

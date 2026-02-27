@@ -48,7 +48,10 @@ async function main() {
     user = await client.start({
       phone: () => ask("  Phone number: "),
       code: () => ask("  Code: "),
-      password: () => ask("  2FA Password: "),
+      password: () => {
+        console.log("  Wrong password? mtcute will re-prompt automatically.");
+        return ask("  2FA Password: ");
+      },
       codeSentCallback: (sent) => {
         const hints: Record<string, string> = {
           app: "Check your Telegram app for a message from Telegram",
@@ -74,7 +77,10 @@ async function main() {
         const sec = Math.round((expires.getTime() - Date.now()) / 1000);
         console.log(`  Expires in ${sec}s — waiting for scan...\n`);
       },
-      password: () => ask("  2FA Password: "),
+      password: () => {
+        console.log("  Wrong password? mtcute will re-prompt automatically.");
+        return ask("  2FA Password: ");
+      },
     });
   }
 
