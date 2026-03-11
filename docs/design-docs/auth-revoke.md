@@ -95,6 +95,25 @@ Notes:
 
 Register the listener immediately after constructing the real runtime client and before `importSession()` / `connect()`.
 
+Callsite example — exact initialization order in `getTelegramClient()`:
+
+```ts
+client = new TelegramClient({
+  apiId,
+  apiHash: apiHash as string,
+  storage: "bot-data/session",
+  disableUpdates: true,
+})
+
+// Attach BEFORE importSession/connect so no auth error can escape unhandled
+attachAuthExpiryHandler(client)
+
+await client.importSession(session)
+await client.connect()
+```
+
+Handler implementation:
+
 ```ts
 function attachAuthExpiryHandler(current: TelegramClient): void {
   current.onError.add((err) => {
@@ -267,6 +286,7 @@ MCP SDK v1.26.0 wraps tool handler invocations and converts unhandled exceptions
 Two safe patterns to work around this:
 
 **Option A — throw `McpError` inside each tool handler:**
+
 ```ts
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js"
 
@@ -287,6 +307,7 @@ try {
 ```
 
 **Option B — wrapper utility:**
+
 ```ts
 export async function withTelegramClient<T>(
   fn: (client: TelegramClient) => Promise<T>
