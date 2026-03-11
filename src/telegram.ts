@@ -1,33 +1,246 @@
-import { TelegramClient } from "@mtcute/bun";
+import { rm } from "node:fs/promises";
+import { TelegramClient, tl } from "@mtcute/bun";
+import { loadEnv, saveEnv } from "./env.ts";
 import { log } from "./logger.ts";
 
+const AUTH_CLEANUP_TIMEOUT_MS = 10_000;
+
+export const TERMINAL_AUTH_TEXTS = new Set([
+  "AUTH_KEY_UNREGISTERED",
+  "AUTH_KEY_INVALID",
+  "AUTH_KEY_PERM_EMPTY",
+  "AUTH_KEY_DUPLICATED",
+  "SESSION_REVOKED",
+  "SESSION_EXPIRED",
+  "USER_DEACTIVATED",
+]);
+
+type AuthRevokedState = {
+  reason: string;
+  revokedAt: string;
+  session: string | null;
+};
+
+type TelegramAuthRequiredError = {
+  readonly type: "telegram_auth_required";
+  readonly reason: string;
+  readonly revokedAt: string;
+};
+
 let client: TelegramClient | null = null;
+let authCleanupPromise: Promise<void> | null = null;
+let currentSession: string | null = null;
+let authRevokedState: AuthRevokedState | null = null;
+let cleanupTimeoutMs = AUTH_CLEANUP_TIMEOUT_MS;
+
+export class TelegramSessionExpiredError extends Error {
+  constructor(
+    readonly reason: string,
+    readonly revokedAt: string,
+  ) {
+    super("Telegram session expired or was revoked.");
+    this.name = "TelegramSessionExpiredError";
+  }
+}
 
 export function isSessionConfigured(): boolean {
   if (process.env.TELEGRAM_MOCK === "true") return true;
   return Boolean(process.env.TELEGRAM_SESSION);
 }
 
+export function getAuthFailureReason(err: unknown): string | null {
+  if (!tl.RpcError.is(err)) return null;
+  return TERMINAL_AUTH_TEXTS.has(err.text) ? err.text : null;
+}
+
+function isUnknownAuthRpcError(err: unknown): err is tl.RpcError {
+  return (
+    tl.RpcError.is(err) &&
+    !TERMINAL_AUTH_TEXTS.has(err.text) &&
+    (err.code === tl.RpcError.UNAUTHORIZED || err.code === tl.RpcError.NOT_ACCEPTABLE)
+  );
+}
+
+function warnUnexpectedAuthRpcError(err: tl.RpcError, context: string): void {
+  log.warn(
+    {
+      code: err.code,
+      text: err.text,
+    },
+    `unexpected Telegram auth error during ${context}`,
+  );
+}
+
+function getRevokedSessionError(): TelegramSessionExpiredError | null {
+  const revoked = authRevokedState;
+  if (!revoked) return null;
+
+  const session = process.env.TELEGRAM_SESSION;
+  if (session && session !== revoked.session && session !== currentSession) {
+    authRevokedState = null;
+    return null;
+  }
+
+  return new TelegramSessionExpiredError(revoked.reason, revoked.revokedAt);
+}
+
+async function waitForAuthCleanup(cleanup: Promise<void>): Promise<void> {
+  const outcome = await Promise.race<"settled" | "timed_out">([
+    cleanup.then(() => "settled"),
+    new Promise<"timed_out">((resolve) => {
+      setTimeout(() => resolve("timed_out"), cleanupTimeoutMs);
+    }),
+  ]);
+
+  if (outcome === "timed_out") {
+    const duration =
+      cleanupTimeoutMs % 1000 === 0 ? `${cleanupTimeoutMs / 1000}s` : `${cleanupTimeoutMs}ms`;
+    throw new Error(`auth cleanup timed out after ${duration}`);
+  }
+}
+
+export function attachAuthExpiryHandler(current: TelegramClient): void {
+  current.onError.add((err) => {
+    const reason = getAuthFailureReason(err);
+    if (reason) {
+      if (!authCleanupPromise) {
+        void autoLogoutCurrentSession(current, reason);
+      }
+      return;
+    }
+
+    if (isUnknownAuthRpcError(err)) {
+      warnUnexpectedAuthRpcError(err, "runtime error handling");
+    }
+  });
+}
+
+export async function autoLogoutCurrentSession(
+  current: TelegramClient,
+  reason: string,
+): Promise<void> {
+  if (authCleanupPromise) {
+    await authCleanupPromise;
+    return;
+  }
+
+  const revokedSession = currentSession;
+  const revokedAt = new Date().toISOString();
+
+  const cleanup = (async () => {
+    authRevokedState = {
+      reason,
+      revokedAt,
+      session: revokedSession,
+    };
+
+    log.warn({ reason, revokedAt }, "telegram session expired or was revoked");
+
+    try {
+      await current.logOut();
+    } catch (err) {
+      log.warn({ err }, "logOut failed during auth cleanup");
+      try {
+        await current.notifyLoggedOut();
+      } catch (notifyErr) {
+        log.warn({ err: notifyErr }, "notifyLoggedOut fallback failed during auth cleanup");
+      }
+    }
+
+    try {
+      await current.destroy();
+    } catch (err) {
+      log.warn({ err }, "destroy failed during auth cleanup");
+    } finally {
+      if (client === current) {
+        client = null;
+      }
+      currentSession = null;
+    }
+
+    try {
+      const env = loadEnv();
+      delete env.TELEGRAM_SESSION;
+      saveEnv(env);
+    } catch (err) {
+      log.warn({ err }, "failed to remove TELEGRAM_SESSION from .env");
+    }
+
+    try {
+      delete process.env.TELEGRAM_SESSION;
+    } catch (err) {
+      log.warn({ err }, "failed to remove TELEGRAM_SESSION from process env");
+    }
+
+    try {
+      await rm("bot-data/session", { force: true });
+    } catch (err) {
+      log.warn({ err }, "failed to delete bot-data/session");
+    }
+
+    try {
+      await rm("bot-data/session-wal", { force: true });
+    } catch (err) {
+      log.warn({ err }, "failed to delete bot-data/session-wal");
+    }
+
+    try {
+      await rm("bot-data/session-shm", { force: true });
+    } catch (err) {
+      log.warn({ err }, "failed to delete bot-data/session-shm");
+    }
+  })().finally(() => {
+    authCleanupPromise = null;
+  });
+
+  authCleanupPromise = cleanup;
+  await cleanup;
+}
+
 export async function closeTelegramClient(): Promise<void> {
+  if (authCleanupPromise) {
+    await authCleanupPromise;
+    return;
+  }
+
+  if (authRevokedState && client) {
+    await autoLogoutCurrentSession(client, authRevokedState.reason);
+    return;
+  }
+
   if (!client) return;
+
+  const current = client;
   try {
-    await client.disconnect();
+    await current.disconnect();
   } finally {
-    client = null;
+    if (client === current) {
+      client = null;
+    }
+    currentSession = null;
   }
 }
 
 export async function getTelegramClient(): Promise<TelegramClient> {
-  if (client) return client;
-
-  // Mock mode: return fake client with in-memory data
   if (process.env.TELEGRAM_MOCK === "true") {
-    const { createMockClient } = await import("./mock/client.ts");
-    const mockClient = createMockClient() as unknown as TelegramClient;
-    client = mockClient;
-    log.info("using mock telegram client");
+    if (!client) {
+      const { createMockClient } = await import("./mock/client.ts");
+      client = createMockClient() as unknown as TelegramClient;
+      log.info("using mock telegram client");
+    }
     return client;
   }
+
+  if (authCleanupPromise) {
+    await waitForAuthCleanup(authCleanupPromise);
+  }
+
+  const revokedError = getRevokedSessionError();
+  if (revokedError) {
+    throw revokedError;
+  }
+
+  if (client) return client;
 
   const apiId = Number(process.env.TELEGRAM_API_ID);
   const apiHash = process.env.TELEGRAM_API_HASH;
@@ -43,19 +256,112 @@ export async function getTelegramClient(): Promise<TelegramClient> {
     throw new Error("TELEGRAM_SESSION env var is required. Run `bun auth` first.");
   }
 
-  client = new TelegramClient({
+  const current = new TelegramClient({
     apiId,
-    apiHash: apiHash as string,
+    apiHash,
     storage: "bot-data/session",
     disableUpdates: true,
   });
 
-  log.info("importing telegram session");
-  await client.importSession(session);
+  client = current;
+  attachAuthExpiryHandler(current);
 
-  log.info("connecting to telegram");
-  await client.connect();
-  log.info("connected to telegram");
+  try {
+    log.info("importing telegram session");
+    await current.importSession(session);
 
-  return client;
+    log.info("connecting to telegram");
+    await current.connect();
+    log.info("connected to telegram");
+
+    currentSession = session;
+    return current;
+  } catch (err) {
+    if (client === current) {
+      client = null;
+    }
+
+    const reason = getAuthFailureReason(err);
+    if (reason) {
+      await autoLogoutCurrentSession(current, reason);
+      const revokedAfterCleanup = getRevokedSessionError();
+      if (revokedAfterCleanup) {
+        throw revokedAfterCleanup;
+      }
+    }
+
+    if (authCleanupPromise) {
+      await waitForAuthCleanup(authCleanupPromise);
+      const revokedAfterWait = getRevokedSessionError();
+      if (revokedAfterWait) {
+        throw revokedAfterWait;
+      }
+    }
+
+    if (isUnknownAuthRpcError(err)) {
+      warnUnexpectedAuthRpcError(err, "client bootstrap");
+    }
+
+    throw err;
+  }
+}
+
+function createTelegramAuthRequiredError(
+  error: TelegramSessionExpiredError,
+): TelegramAuthRequiredError {
+  return {
+    type: "telegram_auth_required",
+    reason: error.reason,
+    revokedAt: error.revokedAt,
+  };
+}
+
+export function isTelegramAuthRequiredError(err: unknown): err is TelegramAuthRequiredError {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "type" in err &&
+    err.type === "telegram_auth_required" &&
+    "reason" in err &&
+    typeof err.reason === "string" &&
+    "revokedAt" in err &&
+    typeof err.revokedAt === "string"
+  );
+}
+
+export async function withTelegramClient<T>(
+  handler: (current: TelegramClient) => Promise<T> | T,
+): Promise<T> {
+  try {
+    return await handler(await getTelegramClient());
+  } catch (err) {
+    if (err instanceof TelegramSessionExpiredError) {
+      throw createTelegramAuthRequiredError(err);
+    }
+    throw err;
+  }
+}
+
+export function resetTelegramState(): void {
+  client = null;
+  authCleanupPromise = null;
+  currentSession = null;
+  authRevokedState = null;
+  cleanupTimeoutMs = AUTH_CLEANUP_TIMEOUT_MS;
+}
+
+export function setAuthCleanupPromiseForTests(cleanup: Promise<void> | null): void {
+  authCleanupPromise = cleanup;
+}
+
+export function setAuthRevokedStateForTests(state: AuthRevokedState | null): void {
+  authRevokedState = state;
+}
+
+export function setCurrentSessionForTests(session: string | null): void {
+  currentSession = session;
+}
+
+export function setCleanupTimeoutMsForTests(timeoutMs: number): void {
+  cleanupTimeoutMs = timeoutMs;
 }
