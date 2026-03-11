@@ -88,9 +88,9 @@ Map revoked-session failures in `src/server.ts`, not in `src/auth.ts`.
 Implementation plan:
 
 - Introduce a request-scoped wrapper for tool handlers in `src/server.ts` because MCP SDK `1.26.x` converts uncaught handler exceptions to generic internal errors before the outer `fetch()` catch can shape the response.
-- Export `withTelegramClient(handler)` from `src/telegram.ts`. It should call `getTelegramClient()`, run the supplied handler, catch `TelegramSessionExpiredError`, and rethrow a tagged auth-required error (or return a sentinel consumed only by the server wrapper) so tool bodies do not need their own revoke-specific `try/catch`.
-- Change `createMcpServer()` / `registerTools()` to accept the current `Request` and `port`, or add an equivalent closure-based wrapper around tool registration that applies that middleware once to every `server.tool(...)` handler.
-- In that outer wrapper, catch the tagged auth-required failure produced by `withTelegramClient()` / `getTelegramClient()` and convert it to a stable MCP/JSON-RPC error:
+- Export `withTelegramClient(handler)` from `src/telegram.ts`. It should call `getTelegramClient()`, pass the singleton into the supplied handler, catch `TelegramSessionExpiredError`, and rethrow a tagged auth-required error understood by `src/server.ts`. Tool bodies should call this helper instead of adding revoke-specific `try/catch` logic or calling `getTelegramClient()` directly.
+- Keep the request-aware error mapping centralized in `src/server.ts`: `createMcpServer()` / `registerTools()` should thread the current `Request` and `port` into one outer wrapper that catches only the tagged auth-required failure from `withTelegramClient()` and converts it to the RFC response. Individual `server.tool(...)` callbacks stay clean and only implement tool logic.
+- In that outer wrapper, convert the tagged auth-required failure from `withTelegramClient()` / `getTelegramClient()` to a stable MCP/JSON-RPC error:
   - `code: -32001`
   - `message: "Telegram session expired or was revoked. Re-authentication is required."`
   - `data: { authRequired: true, reason, revokedAt, authUrl }`
@@ -99,10 +99,15 @@ Implementation plan:
 `authUrl` generation must follow the RFC decision order:
 
 - `PUBLIC_BASE_URL` first if set.
-- Otherwise, implement `isTrustedProxy(clientIp)` in `src/server.ts` using `process.env.TRUSTED_PROXY_IPS` as a comma-separated allowlist of IPs and CIDR blocks.
-- Use the actual connection/socket IP as the starting point. If that hop is trusted, walk `X-Forwarded-For` from right to left and treat the rightmost untrusted entry as the originating client IP. Only after that trust check passes may `X-Forwarded-Host`, `X-Forwarded-Proto`, and optionally `Origin` / `Referer` influence the redirect base URL; if the trust check fails, forwarded headers are ignored entirely.
-- Validate and sanitize every header-derived value before use: reject hosts containing control characters or values that are not valid hosts, reject schemes other than `http` / `https`, and reconstruct the final URL with a safe helper such as `buildRedirectUrl(host, proto, path)` instead of string concatenation.
-- If the proxy trust check fails or any forwarded/origin header fails validation, log at `WARN`, ignore those headers, and fall back to the documented safe base URL path.
+- Otherwise, implement `isTrustedProxy(clientIp)` in `src/server.ts` using `process.env.TRUSTED_PROXY_IPS` as a comma-separated allowlist of literal IPs and CIDR blocks. An empty or unset env var means no proxies are trusted.
+- Extract the immediate peer IP from the connection socket first. If that runtime path is unavailable, fall back to the rightmost `X-Forwarded-For` entry only for trust evaluation. If the peer IP is not in `TRUSTED_PROXY_IPS`, treat the request as untrusted.
+- If the peer IP is trusted and `X-Forwarded-For` is present, walk the list from right to left so the rightmost trusted hops are stripped and the first untrusted hop becomes the effective originating client IP for logging and auditing.
+- Accept `X-Forwarded-Host` and `X-Forwarded-Proto` only when the peer IP is trusted. If the trust check fails, ignore forwarded headers entirely, log at `WARN`, and fall back to `PUBLIC_BASE_URL` or `http://localhost:${port}`.
+- Validate every header-derived value before use:
+  - hostname: no control characters, must parse as a valid host or host:port value
+  - scheme: only `http` or `https`
+- Reconstruct the final URL with a safe builder such as ``new URL(path, `${proto}://${host}`)`` instead of string concatenation.
+- If the proxy trust check fails or any forwarded header fails validation, log at `WARN`, ignore those headers, and fall back to the documented safe base URL path.
 - Fall back to `http://localhost:${port}` for local development.
 
 `src/web-auth.ts` must expose a stable setup-token helper:
@@ -125,7 +130,8 @@ Automated coverage:
 Manual validation:
 
 - Start the server with a real session, revoke that session from Telegram settings, and confirm the next tool call returns the auth-required error instead of `-32603`.
-- Verify that a failed `logOut()` still clears runtime state and that the server does not recreate the revoked singleton until a fresh `/auth` completes.
+- Treat forced cleanup-failure scenarios as integration-test-only validations. Simulate them by mocking `client.logOut()` to throw with `jest.spyOn(...)` or Bun's `mock.module(...)`, separately mocking `notifyLoggedOut()` to throw, and disabling network or blackholing the Telegram endpoint to trigger timeout-style failures.
+- In each of those integration-test-only failure cases, assert that runtime state is still cleared even when `logOut()` / `notifyLoggedOut()` fail and that the revoked singleton is not recreated until a fresh `/auth` completes.
 - Complete the existing `/auth` web flow and confirm the next tool call builds a fresh singleton without restarting the process.
 - Check edge cases explicitly: concurrent revocation signals, repeated auth-required requests, failed `notifyLoggedOut()`, and non-auth mtcute errors such as `FLOOD_WAIT`.
 - Treat network-induced cleanup failures as integration-test-only checks: temporarily disable network connectivity, blackhole the Telegram endpoint, or use any available mtcute test utilities to induce timeouts/failures around `logOut()` / `notifyLoggedOut()`, then verify that runtime state is still cleared and the revoked singleton stays unavailable until a fresh `/auth` completes.
