@@ -1,21 +1,17 @@
 import { BlockList, isIP } from "node:net";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import {
-  CallToolRequestSchema,
-  ErrorCode,
-  McpError,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
 import { isChatAllowed, loadConfig } from "./config.ts";
 import { log } from "./logger.ts";
 import {
-  TelegramSessionExpiredError,
   closeTelegramClient,
   getTelegramClient,
-  isTelegramAuthRequiredError,
   isSessionConfigured,
+  isTelegramAuthRequiredError,
+  TelegramSessionExpiredError,
   withTelegramClient,
 } from "./telegram.ts";
 import {
@@ -78,8 +74,15 @@ function installToolRequestHandler(server: McpServer, context: RequestContext): 
     }
 
     try {
-      const args = await internals.validateToolInput(tool, request.params.arguments, request.params.name);
-      const result = (await internals.executeToolHandler(tool, args, extra)) as Record<string, unknown>;
+      const args = await internals.validateToolInput(
+        tool,
+        request.params.arguments,
+        request.params.name,
+      );
+      const result = (await internals.executeToolHandler(tool, args, extra)) as Record<
+        string,
+        unknown
+      >;
       await internals.validateToolOutput(tool, result, request.params.name);
       return result;
     } catch (err) {
@@ -257,7 +260,7 @@ function validateForwardedHost(value: string | null): string | null {
   const host = splitCommaHeader(value)[0];
   if (!host) return null;
 
-  if (/[\u0000-\u001F\u007F]/.test(host)) return null;
+  if ([...host].some((c) => c.charCodeAt(0) <= 0x1f || c.charCodeAt(0) === 0x7f)) return null;
   if (/[/?#@]/.test(host)) return null;
 
   try {
@@ -321,7 +324,10 @@ function getForwardedBaseUrl(context: RequestContext): URL | null {
   try {
     return new URL("/", `${forwardedProto}://${forwardedHost}`);
   } catch (err) {
-    log.warn({ err, forwardedHost, forwardedProto }, "failed to build auth URL from forwarded headers");
+    log.warn(
+      { err, forwardedHost, forwardedProto },
+      "failed to build auth URL from forwarded headers",
+    );
     return null;
   }
 }
@@ -352,11 +358,11 @@ export function buildAuthUrl(context: RequestContext): string {
 function logStartupAuthRequired(port: number, reason?: string): void {
   ensureSetupToken();
 
-  const authPath = new URL("/auth", getPublicBaseUrl() ?? new URL(`http://localhost:${port}`)).toString();
-  log.warn(
-    { authPath, reason },
-    "auth required — open the web auth page to connect Telegram",
-  );
+  const authPath = new URL(
+    "/auth",
+    getPublicBaseUrl() ?? new URL(`http://localhost:${port}`),
+  ).toString();
+  log.warn({ authPath, reason }, "auth required — open the web auth page to connect Telegram");
 }
 
 export function parseChatId(chatId: string): string | number {
