@@ -17,9 +17,20 @@ const sseControllers = new Set<ReadableStreamDefaultController>();
 // ---------------------------------------------------------------------------
 // Token lifecycle
 // ---------------------------------------------------------------------------
-export function generateSetupToken(): string {
+function generateSetupToken(): string {
   setupToken = crypto.randomUUID();
   return setupToken;
+}
+
+export function ensureSetupToken(): string {
+  if (!setupToken) {
+    return generateSetupToken();
+  }
+  return setupToken;
+}
+
+export function resetSetupTokenForTests(): void {
+  setupToken = null;
 }
 
 function validateToken(token: string | null): boolean {
