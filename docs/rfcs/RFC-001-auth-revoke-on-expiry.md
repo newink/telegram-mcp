@@ -75,22 +75,21 @@ That is useful, but it does not solve the primary-session-expired case that brea
 
 ## Exact auth-related errors to handle
 
-The runtime auto-logout path should treat the following as terminal auth loss when they surface to the application:
+Define `TERMINAL_AUTH_TEXTS` as the exact sentinel texts below. The runtime auto-logout path should treat only these exact `RpcError.text` values as terminal auth loss when they surface to the application:
 
-| Match | Type | Why it is terminal |
+| Match (`TERMINAL_AUTH_TEXTS`) | Type | Why it is terminal |
 | --- | --- | --- |
 | `AUTH_KEY_UNREGISTERED` | `RpcError.text` | The auth key backing the session is no longer valid |
 | `SESSION_REVOKED` | `RpcError.text` | Telegram invalidated the authorization |
 | `SESSION_EXPIRED` | `RpcError.text` | The authorization expired |
 | `USER_DEACTIVATED` | `RpcError.text` | The account is deactivated |
 | `USER_DEACTIVATED_BAN` | `RpcError.text` | The account is deactivated/banned; mtcute already treats it like revoked auth in auth startup |
-| `RpcError.UNAUTHORIZED` (`401`) | `RpcError.code` | Fallback bucket for auth-loss errors that do not use one of the exact strings above |
 
 Notes:
 
 - `SESSION_REVOKED`, `USER_DEACTIVATED`, and `USER_DEACTIVATED_BAN` are already handled specially by mtcute's auth startup flow.
 - `SESSION_EXPIRED` is present in mtcute's TL error descriptions even if the current repo does not explicitly branch on it yet.
-- `UNAUTHORIZED` in mtcute is a numeric RPC error class (`401`), not necessarily a literal text string.
+- A bare `RpcError.UNAUTHORIZED` (`401`) is not terminal by itself. If `RpcError.code === 401` and `RpcError.text` exactly equals one of `TERMINAL_AUTH_TEXTS`, auto-logout; otherwise log at `WARN` and surface the unexpected variant for investigation.
 
 ## Proposed solution
 
@@ -146,18 +145,21 @@ After cleanup, tool calls should fail with an intentional JSON-RPC server error 
     "message": "Telegram session expired or was revoked. Re-authentication is required.",
     "data": {
       "authRequired": true,
-      "reason": "SESSION_REVOKED"
+      "reason": "SESSION_REVOKED",
+      "authUrl": "https://mcp.example.com/auth?token=<setup-token>"
     }
   },
   "id": null
 }
 ```
 
-The exact numeric code can still be finalized, but the important behavior is:
+This error contract is normative:
 
-- not `-32603`
-- not a raw mtcute stack trace
-- clearly actionable for an MCP client or operator
+- use JSON-RPC error code `-32001`, not `-32603`
+- include `data.authRequired`, `data.reason`, and `data.authUrl`
+- derive `authUrl` from `PUBLIC_BASE_URL` first, then from validated trusted-proxy headers, then from `http://localhost:{port}` as the local-dev fallback
+- trigger auto-logout only when `RpcError.text` exactly matches one of `TERMINAL_AUTH_TEXTS`; unknown `401` variants must not auto-logout
+- never log raw auth tokens; log only that an auth URL was generated
 
 ## Re-authentication flow
 
@@ -200,6 +202,6 @@ Rejected for this RFC. Process restart is heavier than necessary and still leave
 
 2. **authUrl in error payload**: Include `authUrl` in the JSON-RPC error `data` object so MCP clients can surface it without server-side log access. Derive the URL using this priority order: (a) `PUBLIC_BASE_URL` env var if set — always trusted; (b) `X-Forwarded-Host` / `origin` request headers **only** when the request passed through a validated trusted proxy (verified against a `TRUSTED_PROXIES` allowlist or equivalent — untrusted header-derived URLs must not be used); (c) `http://localhost:{port}` as last resort for local dev only. Never log the raw token — log only that an auth URL was generated.
 
-3. **401 allowlist**: Every `401` RpcError does NOT automatically trigger auto-logout. The `TERMINAL_AUTH_TEXTS` allowlist contains exactly: `AUTH_KEY_UNREGISTERED`, `SESSION_REVOKED`, `SESSION_EXPIRED`, `USER_DEACTIVATED`, `USER_DEACTIVATED_BAN`. Deterministic rule: if `RpcError.text` exactly matches one of these strings (at any error code) → perform auto-logout. If `RpcError.code === 401` AND `RpcError.text` is NOT in the list → do NOT auto-logout; log at WARN with the unexpected text and surface for investigation. This prevents accidentally destroying sessions on transient or unknown 401 variants.
+3. **401 allowlist**: Name the exact sentinel set `TERMINAL_AUTH_TEXTS`: `AUTH_KEY_UNREGISTERED`, `SESSION_REVOKED`, `SESSION_EXPIRED`, `USER_DEACTIVATED`, `USER_DEACTIVATED_BAN`. Deterministic rule: if `RpcError.code === 401` AND `RpcError.text` exactly equals one of `TERMINAL_AUTH_TEXTS` → perform auto-logout. If `RpcError.code === 401` AND `RpcError.text` is NOT in `TERMINAL_AUTH_TEXTS` → do NOT auto-logout; log at `WARN` and surface for investigation. In practice the implementation keys off exact `RpcError.text` matches from `TERMINAL_AUTH_TEXTS`; a bare `401` is never sufficient.
 
 4. **Observability**: Structured logs at `WARN` level are sufficient. No tombstone file on disk. The `authRevokedState` in-memory object serves as the runtime signal; log entries provide the audit trail.

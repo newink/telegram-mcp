@@ -79,7 +79,7 @@ function getAuthFailureReason(err: unknown): string | null {
   }
 
   if (err.code === tl.RpcError.UNAUTHORIZED) {
-    return err.text || "UNAUTHORIZED"
+    return TERMINAL_AUTH_TEXTS.has(err.text) ? err.text : null
   }
 
   return null
@@ -90,6 +90,7 @@ Notes:
 
 - Treat surfaced `AUTH_KEY_UNREGISTERED` as terminal for the runtime singleton.
 - It is fine that mtcute already retries one non-primary-DC `AUTH_KEY_UNREGISTERED` branch internally; this handler only runs when the error escapes to the application.
+- A bare `401` is not terminal. Unexpected `RpcError.UNAUTHORIZED` text variants should be logged and investigated, not auto-logout the session.
 
 ## Runtime handler sketch
 
@@ -242,12 +243,14 @@ try {
 } catch (err) {
   if (err instanceof TelegramSessionExpiredError) {
     const token = ensureSetupToken()
+    const trustedProxyOrigin =
+      TRUSTED_PROXY_ENABLED && isTrustedProxyRequest(request, TRUSTED_PROXIES)
+        ? getTrustedProxyOrigin(request)
+        : null
     const authBase =
       process.env.PUBLIC_BASE_URL ??
-      (request.headers.get("x-forwarded-host")
-        ? `${request.headers.get("x-forwarded-proto") ?? "https"}://${request.headers.get("x-forwarded-host")}`
-        : request.headers.get("origin")) ??
-      `http://localhost:${port}`
+      trustedProxyOrigin ??
+      `http://localhost:${port}` // local dev fallback only
     const authUrl = `${authBase}/auth?token=${token}`
 
     return new Response(
@@ -276,7 +279,9 @@ Recommended behavior:
 
 - Use `-32001` (not `-32603`) — distinct, actionable code for auth loss.
 - Include `authRequired: true` so MCP clients can distinguish this from transient failures.
+- Prefer `PUBLIC_BASE_URL`; only use header-derived origins after validated trusted-proxy checks (`TRUSTED_PROXY_ENABLED` / `TRUSTED_PROXIES`).
 - Prefer HTTP 503 over 500 because the service can recover after operator action.
+- Never include raw unvalidated header values in `authUrl`.
 - Never include the raw token in logs — only in the JSON-RPC `data.authUrl` payload.
 
 ### Note: MCP SDK v1.26 exception interception
@@ -285,10 +290,10 @@ MCP SDK v1.26.0 wraps tool handler invocations and converts unhandled exceptions
 
 Two safe patterns to work around this:
 
-**Option A — throw `McpError` inside each tool handler:**
+#### Option A: throw `McpError` inside each tool handler
 
 ```ts
-import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js"
+import { McpError } from "@modelcontextprotocol/sdk/types.js"
 
 // At the top of every tool handler that calls getTelegramClient():
 try {
@@ -299,14 +304,18 @@ try {
     throw new McpError(
       -32001,
       "Telegram session expired. Re-authentication is required.",
-      { authRequired: true, reason: err.reason },
+      {
+        authRequired: true,
+        reason: err.reason,
+        authUrl: err.authUrl ?? err.data?.authUrl,
+      },
     )
   }
   throw err
 }
 ```
 
-**Option B — wrapper utility:**
+#### Option B: wrapper utility
 
 ```ts
 export async function withTelegramClient<T>(
@@ -317,7 +326,11 @@ export async function withTelegramClient<T>(
     return await fn(client)
   } catch (err) {
     if (err instanceof TelegramSessionExpiredError) {
-      throw new McpError(-32001, err.message, { authRequired: true, reason: err.reason })
+      throw new McpError(-32001, err.message, {
+        authRequired: true,
+        reason: err.reason,
+        authUrl: err.authUrl ?? err.data?.authUrl,
+      })
     }
     throw err
   }
