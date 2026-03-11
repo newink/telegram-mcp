@@ -224,7 +224,7 @@ function getTrustedProxyBlockList(): BlockList | null {
   return added > 0 ? blockList : null;
 }
 
-export function isTrustedProxy(clientIp: string | null): boolean {
+function isTrustedProxy(clientIp: string | null): boolean {
   if (!clientIp) return false;
 
   const blockList = getTrustedProxyBlockList();
