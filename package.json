@@ -9,7 +9,7 @@
     "dev": "bun run src/index.ts",
     "start": "bun run src/index.ts",
     "dev:mock": "TELEGRAM_MOCK=true bun run src/index.ts",
-    "test": "TELEGRAM_MOCK=true bun test",
+    "test": "bun test --preload ./src/test-preload.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -37,9 +37,6 @@
     "project": [
       "src/**/*.ts",
       "scripts/**/*.ts"
-    ],
-    "ignore": [
-      "**/*.test.ts"
     ]
   },
   "dependencies": {

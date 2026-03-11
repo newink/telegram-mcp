@@ -24,7 +24,7 @@ function generateSetupToken(): string {
 
 export function ensureSetupToken(): string {
   if (!setupToken) {
-    setupToken = crypto.randomUUID();
+    return generateSetupToken();
   }
   return setupToken;
 }
