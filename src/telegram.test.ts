@@ -2,10 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TelegramClient, tl } from "@mtcute/bun";
+import { type TelegramClient, tl } from "@mtcute/bun";
 import {
-  TERMINAL_AUTH_TEXTS,
-  TelegramSessionExpiredError,
   attachAuthExpiryHandler,
   autoLogoutCurrentSession,
   getAuthFailureReason,
@@ -15,6 +13,8 @@ import {
   setAuthRevokedStateForTests,
   setCleanupTimeoutMsForTests,
   setCurrentSessionForTests,
+  TERMINAL_AUTH_TEXTS,
+  TelegramSessionExpiredError,
 } from "./telegram.ts";
 import { resetSetupTokenForTests } from "./web-auth.ts";
 
@@ -196,9 +196,9 @@ describe("telegram auth revoke", () => {
     expect(getAuthFailureReason(createRpcError(tl.RpcError.UNAUTHORIZED, "SESSION_REVOKED"))).toBe(
       "SESSION_REVOKED",
     );
-    expect(getAuthFailureReason(createRpcError(tl.RpcError.NOT_ACCEPTABLE, "AUTH_KEY_DUPLICATED"))).toBe(
-      "AUTH_KEY_DUPLICATED",
-    );
+    expect(
+      getAuthFailureReason(createRpcError(tl.RpcError.NOT_ACCEPTABLE, "AUTH_KEY_DUPLICATED")),
+    ).toBe("AUTH_KEY_DUPLICATED");
     expect(
       getAuthFailureReason(createRpcError(tl.RpcError.UNAUTHORIZED, "USER_DEACTIVATED_BAN")),
     ).toBeNull();

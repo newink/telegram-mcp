@@ -67,7 +67,10 @@ describe("server auth required mapping", () => {
       session: "revoked-session",
     });
 
-    const { client, server } = await createConnectedClient(new Request("http://localhost/mcp"), null);
+    const { client, server } = await createConnectedClient(
+      new Request("http://localhost/mcp"),
+      null,
+    );
 
     try {
       await expect(
@@ -76,19 +79,19 @@ describe("server auth required mapping", () => {
           arguments: { query: "alice", limit: 1 },
         }),
       ).rejects.toMatchObject({
-          code: -32001,
-          message: expect.stringContaining(
-            "Telegram session expired or was revoked. Re-authentication is required.",
+        code: -32001,
+        message: expect.stringContaining(
+          "Telegram session expired or was revoked. Re-authentication is required.",
+        ),
+        data: expect.objectContaining({
+          authRequired: true,
+          reason: "SESSION_REVOKED",
+          revokedAt: "2026-03-11T00:00:00.000Z",
+          authUrl: expect.stringMatching(
+            /^https:\/\/public\.example\.com\/auth\?token=[0-9a-f-]+$/,
           ),
-          data: expect.objectContaining({
-            authRequired: true,
-            reason: "SESSION_REVOKED",
-            revokedAt: "2026-03-11T00:00:00.000Z",
-            authUrl: expect.stringMatching(
-              /^https:\/\/public\.example\.com\/auth\?token=[0-9a-f-]+$/,
-            ),
-          }),
-        });
+        }),
+      });
     } finally {
       await Promise.all([client.close(), server.close()]);
     }
