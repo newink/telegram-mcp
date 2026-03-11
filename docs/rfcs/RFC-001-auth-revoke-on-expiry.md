@@ -1,7 +1,7 @@
 # RFC-001: Auto-logout on Telegram session expiry or revocation
 
 - Status: Draft
-- Date: 2026-03-11
+- Date: 2026-03-11 UTC
 - Scope: Runtime session handling for the long-lived `TelegramClient` singleton
 
 ## Summary
@@ -194,9 +194,12 @@ Rejected. `src/auth.ts` is an interactive setup script and does not own the runt
 
 Rejected for this RFC. Process restart is heavier than necessary and still leaves open questions around stale local session files. The server already has a web auth flow that can recover in-process.
 
-## Open questions
+## Decisions on previously open questions
 
-1. Should the server standardize on JSON-RPC `-32001`, or use a different custom code for `auth required`?
-2. Should `src/server.ts` include a fresh `/auth?token=...` URL directly in the JSON-RPC error `data`, or only log it server-side?
-3. Should every `401` `RpcError` trigger auto-logout, or should the implementation require either a known auth text or `401` plus an allowlist of texts?
-4. Do we want a tombstone state on disk for observability, or are structured logs enough?
+1. **JSON-RPC error code**: Use `-32001` for `auth required`. This is in the custom server error range (`-32099` to `-32000`) and is distinct from the generic `-32603` (internal error). Implementations must not use `-32603` for auth-loss errors.
+
+2. **authUrl in error payload**: Include `authUrl` in the JSON-RPC error `data` object so MCP clients can surface it without server-side log access. Derive the URL from `PUBLIC_BASE_URL` env var if set; otherwise construct it from the `X-Forwarded-Host` / `origin` request header; fall back to `http://localhost:{port}` only as a last resort. Never log the raw token — log only that an auth URL was generated.
+
+3. **401 allowlist**: Every `401` RpcError does NOT automatically trigger auto-logout. Require either (a) one of the known `TERMINAL_AUTH_TEXTS` strings, or (b) a `401` code combined with a text that matches the allowlist set. This avoids accidentally destroying sessions on transient or unexpected 401 variants.
+
+4. **Observability**: Structured logs at `WARN` level are sufficient. No tombstone file on disk. The `authRevokedState` in-memory object serves as the runtime signal; log entries provide the audit trail.

@@ -223,6 +223,13 @@ try {
 } catch (err) {
   if (err instanceof TelegramSessionExpiredError) {
     const token = ensureSetupToken()
+    const authBase =
+      process.env.PUBLIC_BASE_URL ??
+      (request.headers.get("x-forwarded-host")
+        ? `${request.headers.get("x-forwarded-proto") ?? "https"}://${request.headers.get("x-forwarded-host")}`
+        : request.headers.get("origin")) ??
+      `http://localhost:${port}`
+    const authUrl = `${authBase}/auth?token=${token}`
 
     return new Response(
       JSON.stringify({
@@ -233,7 +240,7 @@ try {
           data: {
             authRequired: true,
             reason: err.reason,
-            authUrl: `http://localhost:${port}/auth?token=${token}`,
+            authUrl,
           },
         },
         id: null,
@@ -248,9 +255,55 @@ try {
 
 Recommended behavior:
 
-- Use a custom server error code such as `-32001`.
+- Use `-32001` (not `-32603`) — distinct, actionable code for auth loss.
 - Include `authRequired: true` so MCP clients can distinguish this from transient failures.
 - Prefer HTTP 503 over 500 because the service can recover after operator action.
+- Never include the raw token in logs — only in the JSON-RPC `data.authUrl` payload.
+
+### Note: MCP SDK v1.26 exception interception
+
+MCP SDK v1.26.0 wraps tool handler invocations and converts unhandled exceptions to generic `InternalError` responses before the outer server catch block sees them. This means `TelegramSessionExpiredError` thrown inside a tool handler will be swallowed.
+
+Two safe patterns to work around this:
+
+**Option A — throw `McpError` inside each tool handler:**
+```ts
+import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js"
+
+// At the top of every tool handler that calls getTelegramClient():
+try {
+  const client = await getTelegramClient()
+  // ...
+} catch (err) {
+  if (err instanceof TelegramSessionExpiredError) {
+    throw new McpError(
+      -32001,
+      "Telegram session expired. Re-authentication is required.",
+      { authRequired: true, reason: err.reason },
+    )
+  }
+  throw err
+}
+```
+
+**Option B — wrapper utility:**
+```ts
+export async function withTelegramClient<T>(
+  fn: (client: TelegramClient) => Promise<T>
+): Promise<T> {
+  try {
+    const client = await getTelegramClient()
+    return await fn(client)
+  } catch (err) {
+    if (err instanceof TelegramSessionExpiredError) {
+      throw new McpError(-32001, err.message, { authRequired: true, reason: err.reason })
+    }
+    throw err
+  }
+}
+```
+
+Option B is preferred — it centralizes the conversion and keeps tool handlers clean. The implementation phase will add `withTelegramClient()` to `src/telegram.ts` and wrap all tool calls in `src/server.ts`.
 
 ## Reconnect flow for MCP clients
 
