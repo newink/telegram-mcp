@@ -33,7 +33,7 @@ Update `getTelegramClient()` to gate the real runtime path before creating a new
 
 - Keep the existing mock-mode short-circuit intact.
 - If `authCleanupPromise` is active, wait for it to settle with a bounded timeout (for example `Promise.race()` against a 10s timer). If the timeout fires, throw a descriptive, testable error such as `auth cleanup timed out after 10s`; do not wait indefinitely and do not proceed with singleton creation while cleanup is still stuck. If the promise settles normally and the session is still revoked, continue to throw `TelegramSessionExpiredError` instead of racing a second client build.
-- When `authRevokedState` is set, treat all of the following as still revoked and throw `TelegramSessionExpiredError` immediately: `process.env.TELEGRAM_SESSION === undefined`, an empty string, a value equal to `authRevokedState.session`, or a `currentSession` value equal to `authRevokedState.session`.
+- When `authRevokedState` is set, treat all of the following as still revoked and throw `TelegramSessionExpiredError` immediately: `process.env.TELEGRAM_SESSION === undefined`, an empty string, a value equal to `authRevokedState.session`, or a `currentSession` value equal to `authRevokedState.session`. This comparison must use the session snapshot captured when cleanup started, not a later `.env` read.
 - Only clear `authRevokedState` when `process.env.TELEGRAM_SESSION` contains a non-empty string that differs from both the captured revoked session and the last `currentSession`; that is the signal that a fresh web-auth session has been written and normal singleton creation may resume.
 - Record the session string used for the current singleton in `currentSession` once `importSession()` and `connect()` succeed, and never infer it later from `.env`.
 
@@ -61,7 +61,7 @@ Implement the revoke cleanup in `src/telegram.ts` as a single helper, for exampl
 
 Required order:
 
-1. Capture the active session first from module state, not from `.env` (`const revokedSession = currentSession`), then capture `revokedAt`, set `authRevokedState = { reason, revokedAt, session: revokedSession }`, and assign `authCleanupPromise` before awaiting anything. The implementation should follow the usual `const cleanup = (async () => { ... })(); authCleanupPromise = cleanup; await cleanup;` pattern so Phase 1 always compares against the exact session snapshot present when cleanup started, even if a later `/auth` flow writes a different session string while cleanup is still running.
+1. Capture the active session first from module state, not from `.env` (`const revokedSession = currentSession`), then capture `revokedAt`, set `authRevokedState = { reason, revokedAt, session: revokedSession }` from that exact snapshot, and assign `authCleanupPromise` before awaiting anything. The implementation should follow the usual `const cleanup = (async () => { ... })(); authCleanupPromise = cleanup; await cleanup;` pattern so Phase 1 always compares against the exact session snapshot present when cleanup started, even if a later `/auth` flow writes a different session string while cleanup is still running.
 2. Best-effort `await current.logOut()`.
 3. If `logOut()` fails, log at `WARN` and call `await current.notifyLoggedOut()` as the local-state fallback.
 4. `await current.destroy()` and clear the module-level `client` if it still points at `current`.
@@ -100,7 +100,7 @@ Implementation plan:
 
 - `PUBLIC_BASE_URL` first if set.
 - Otherwise, implement `isTrustedProxy(clientIp)` in `src/server.ts` using `process.env.TRUSTED_PROXY_IPS` as a comma-separated allowlist of IPs and CIDR blocks.
-- Use the actual connection/socket IP as the starting point. If that hop is trusted, walk `X-Forwarded-For` from right to left and treat the rightmost untrusted entry as the originating client IP. Only after that trust check passes may `X-Forwarded-Host`, `X-Forwarded-Proto`, and optionally `Origin` / `Referer` influence the redirect base URL.
+- Use the actual connection/socket IP as the starting point. If that hop is trusted, walk `X-Forwarded-For` from right to left and treat the rightmost untrusted entry as the originating client IP. Only after that trust check passes may `X-Forwarded-Host`, `X-Forwarded-Proto`, and optionally `Origin` / `Referer` influence the redirect base URL; if the trust check fails, forwarded headers are ignored entirely.
 - Validate and sanitize every header-derived value before use: reject hosts containing control characters or values that are not valid hosts, reject schemes other than `http` / `https`, and reconstruct the final URL with a safe helper such as `buildRedirectUrl(host, proto, path)` instead of string concatenation.
 - If the proxy trust check fails or any forwarded/origin header fails validation, log at `WARN`, ignore those headers, and fall back to the documented safe base URL path.
 - Fall back to `http://localhost:${port}` for local development.
@@ -119,7 +119,7 @@ Automated coverage:
 - Add `src/telegram.test.ts` for `TERMINAL_AUTH_TEXTS` classification, unknown-`401` non-cleanup behavior, fail-fast `getTelegramClient()` behavior, the bounded cleanup-wait timeout branch, and cleanup deduplication when multiple revocation signals arrive concurrently.
 - Add filesystem/env cleanup tests that assert `.env`, `process.env.TELEGRAM_SESSION`, and `bot-data/session*` sidecars are removed while `bot-data/auth-session*` and `bot-data/web-auth-session*` must be explicitly verified to remain unchanged.
 - Add `src/server.test.ts` for the JSON-RPC mapping: `-32001`, `authRequired: true`, correct `reason`, and an `authUrl` built from the selected base URL source.
-- Add targeted cleanup-failure tests that stub the Telegram client wrapper or mtcute client methods so `logOut()` throws, `notifyLoggedOut()` throws, or both do, and assert that runtime state is still cleared and the revoked singleton is not recreated until a fresh `/auth` flow writes a new session.
+- Add targeted cleanup-failure tests that stub the Telegram client wrapper or mtcute client methods so `logOut()` throws, `notifyLoggedOut()` throws, or both do. Use Bun spies or module stubs around the revoke-flow wrapper where possible, explicitly cover forced `client.logOut()` failures and separate forced `notifyLoggedOut()` failures, and assert in every case that runtime state is still cleared and the revoked singleton is not recreated until a fresh `/auth` flow writes a new session.
 - Keep existing mock-mode tests green; non-auth failures must still surface through the normal error path.
 
 Manual validation:
@@ -128,7 +128,6 @@ Manual validation:
 - Verify that a failed `logOut()` still clears runtime state and that the server does not recreate the revoked singleton until a fresh `/auth` completes.
 - Complete the existing `/auth` web flow and confirm the next tool call builds a fresh singleton without restarting the process.
 - Check edge cases explicitly: concurrent revocation signals, repeated auth-required requests, failed `notifyLoggedOut()`, and non-auth mtcute errors such as `FLOOD_WAIT`.
-- Simulate revoke failure paths in automated tests with Bun test spies or module mocks (`spyOn()` / `jest.spyOn()`-style helpers and `mock.module()`), for example forcing `client.logOut()` or the Telegram-client wrapper used by the revoke flow to throw, and separately forcing `notifyLoggedOut()` to fail.
 - Treat network-induced cleanup failures as integration-test-only checks: temporarily disable network connectivity, blackhole the Telegram endpoint, or use any available mtcute test utilities to induce timeouts/failures around `logOut()` / `notifyLoggedOut()`, then verify that runtime state is still cleared and the revoked singleton stays unavailable until a fresh `/auth` completes.
 
 Recommended commands before opening the PR:
