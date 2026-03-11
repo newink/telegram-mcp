@@ -153,7 +153,7 @@ After cleanup, tool calls should fail with an intentional JSON-RPC server error 
 }
 ```
 
-This error contract is normative:
+This error contract is normative. The JSON-RPC error code for auth-required failures is standardized to `-32001`:
 
 - use JSON-RPC error code `-32001`, not `-32603`
 - include `data.authRequired`, `data.reason`, and `data.authUrl`
