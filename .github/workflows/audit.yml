@@ -3,7 +3,7 @@ name: Audit
 on:
   schedule:
     - cron: "0 9 * * 1" # Monday 09:00 UTC
-  push:
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
