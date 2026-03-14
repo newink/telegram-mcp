@@ -100,6 +100,7 @@ Fetch a message by its Telegram link.
 Send a text message to a Telegram chat. Write tool — requires config opt-in.
 
 **Parameters:**
+
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
 | chatId | string | yes | — | Numeric ID, @username, or `"me"` |
@@ -109,6 +110,7 @@ Send a text message to a Telegram chat. Write tool — requires config opt-in.
 **Returns:** `{ chatId, message }`
 
 **Config required:**
+
 ```yaml
 tools:
   send_message:
@@ -122,6 +124,7 @@ tools:
 Send a local file to a Telegram chat as a document. Write tool — requires config opt-in.
 
 **Parameters:**
+
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | chatId | string | yes | Numeric ID, @username, or `"me"` |
@@ -131,6 +134,7 @@ Send a local file to a Telegram chat as a document. Write tool — requires conf
 **Returns:** `{ chatId, filePath, message }`
 
 **Config required:**
+
 ```yaml
 tools:
   send_file:

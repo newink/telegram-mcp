@@ -23,19 +23,22 @@ describe("send_message/send_file tool allowlist", () => {
     const prevMock = process.env.TELEGRAM_MOCK;
     const prevConfig = process.env.TELEGRAM_MCP_CONFIG;
 
-    process.env.TELEGRAM_MOCK = "false";
-    // Point to a definitely-missing config path.
-    process.env.TELEGRAM_MCP_CONFIG = "./bot-data/__missing_config_for_test__.yml";
+    try {
+      process.env.TELEGRAM_MOCK = "false";
+      // Point to a definitely-missing config path.
+      process.env.TELEGRAM_MCP_CONFIG = "./bot-data/__missing_config_for_test__.yml";
 
-    resetConfig();
-    const { isChatAllowed } = await import("./config.ts");
-    expect(isChatAllowed("send_message", "me")).toBe(false);
+      resetConfig();
+      const { isChatAllowed } = await import("./config.ts");
+      expect(isChatAllowed("send_message", "me")).toBe(false);
+    } finally {
+      if (prevMock === undefined) delete process.env.TELEGRAM_MOCK;
+      else process.env.TELEGRAM_MOCK = prevMock;
 
-    // restore
-    process.env.TELEGRAM_MOCK = prevMock;
-    if (prevConfig === undefined) delete process.env.TELEGRAM_MCP_CONFIG;
-    else process.env.TELEGRAM_MCP_CONFIG = prevConfig;
+      if (prevConfig === undefined) delete process.env.TELEGRAM_MCP_CONFIG;
+      else process.env.TELEGRAM_MCP_CONFIG = prevConfig;
 
-    resetConfig();
+      resetConfig();
+    }
   });
 });

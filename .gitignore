@@ -1,5 +1,4 @@
 
-!bot-data/config.example.yml
 # Finder (MacOS) folder config
 # IntelliJ based IDEs
 # caches
@@ -10,6 +9,7 @@
 # logs
 # output
 # telegram session data & local config
+
 *.lcov
 *.tgz
 *.tsbuildinfo
@@ -23,7 +23,10 @@
 .eslintcache
 .idea
 _.log
-bot-data/
+
+bot-data/*
+!bot-data/config.example.yml
+
 coverage
 dist
 logs

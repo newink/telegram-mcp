@@ -597,12 +597,13 @@ function registerTools(server: McpServer) {
       }
 
       const chatId = parseChatId(rawChatId);
-      const tg = await getTelegramClient();
-      const msg = await tg.sendText(chatId as TelegramSendChatId, text, { disableWebPreview });
+      return withTelegramClient(async (tg) => {
+        const msg = await tg.sendText(chatId as TelegramSendChatId, text, { disableWebPreview });
 
-      return jsonResponse({
-        chatId,
-        message: formatMessage(msg),
+        return jsonResponse({
+          chatId,
+          message: formatMessage(msg),
+        });
       });
     },
   );
@@ -631,17 +632,18 @@ function registerTools(server: McpServer) {
       }
 
       const chatId = parseChatId(rawChatId);
-      const tg = await getTelegramClient();
-      const msg = await tg.sendMedia(chatId as TelegramSendChatId, {
-        type: "document",
-        file: filePath,
-        caption: caption ?? undefined,
-      } satisfies TelegramSendMediaArgs);
+      return withTelegramClient(async (tg) => {
+        const msg = await tg.sendMedia(chatId as TelegramSendChatId, {
+          type: "document",
+          file: filePath,
+          caption: caption ?? undefined,
+        } satisfies TelegramSendMediaArgs);
 
-      return jsonResponse({
-        chatId,
-        filePath,
-        message: formatMessage(msg),
+        return jsonResponse({
+          chatId,
+          filePath,
+          message: formatMessage(msg),
+        });
       });
     },
   );
