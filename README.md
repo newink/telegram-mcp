@@ -59,6 +59,8 @@ Download files, images, or documents from any message your agent finds — usefu
 | `media_download` | Download media (photo, video, document) from a message to a local file |
 | `message_from_link` | Fetch a message by its `t.me/...` link |
 | `delete_messages` | Delete messages from a chat (requires opt-in via `bot-data/config.yml`) |
+| `send_message` | Send a text message to a chat (requires opt-in via `bot-data/config.yml`) |
+| `send_file` | Send a local file to a chat as a document (requires opt-in via `bot-data/config.yml`) |
 
 Full reference with parameters and examples → [docs/tools.md](docs/tools.md)
 

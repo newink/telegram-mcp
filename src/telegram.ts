@@ -301,6 +301,9 @@ export async function closeTelegramClient(): Promise<void> {
   }
 }
 
+export type TelegramSendChatId = Parameters<TelegramClient["sendText"]>[0];
+export type TelegramSendMediaArgs = Parameters<TelegramClient["sendMedia"]>[1];
+
 export async function getTelegramClient(): Promise<TelegramClient> {
   if (process.env.TELEGRAM_MOCK === "true") {
     if (!client) {

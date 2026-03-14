@@ -32,7 +32,11 @@ export function loadConfig(): Config {
   // Mock mode → permissive config for tests
   if (process.env.TELEGRAM_MOCK === "true") {
     const config = ConfigSchema.parse({
-      tools: { delete_messages: { enabled: true, allowed_chats: ["*"] } },
+      tools: {
+        delete_messages: { enabled: true, allowed_chats: ["*"] },
+        send_message: { enabled: true, allowed_chats: ["*"] },
+        send_file: { enabled: true, allowed_chats: ["*"] },
+      },
     });
     _config = config;
     return config;

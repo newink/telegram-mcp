@@ -95,6 +95,50 @@ Fetch a message by its Telegram link.
 
 **Returns:** `{ link, found, message? }`
 
+## send_message
+
+Send a text message to a Telegram chat. Write tool — requires config opt-in.
+
+**Parameters:**
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| chatId | string | yes | — | Numeric ID, @username, or `"me"` |
+| text | string | yes | — | Message text |
+| disableWebPreview | boolean | no | true | Disable link previews |
+
+**Returns:** `{ chatId, message }`
+
+**Config required:**
+```yaml
+tools:
+  send_message:
+    enabled: true
+    allowed_chats:
+      - "me"
+```
+
+## send_file
+
+Send a local file to a Telegram chat as a document. Write tool — requires config opt-in.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| chatId | string | yes | Numeric ID, @username, or `"me"` |
+| filePath | string | yes | Local file path |
+| caption | string | no | Optional caption |
+
+**Returns:** `{ chatId, filePath, message }`
+
+**Config required:**
+```yaml
+tools:
+  send_file:
+    enabled: true
+    allowed_chats:
+      - "me"
+```
+
 ## delete_messages
 
 Delete one or more messages from a chat. Write tool — requires config opt-in.

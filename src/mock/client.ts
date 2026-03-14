@@ -134,6 +134,35 @@ export function createMockClient() {
       // no-op in mock
     },
 
+    async sendText(
+      _chatId: string | number,
+      text: string,
+      _opts?: { disableWebPreview?: boolean },
+    ) {
+      return {
+        id: Math.floor(Math.random() * 100000),
+        date: new Date(),
+        text,
+        sender: { displayName: "Mock User" },
+        chat: { displayName: "Mock Chat" },
+        media: null,
+      };
+    },
+
+    async sendMedia(
+      _chatId: string | number,
+      args: { type: string; file: string; caption?: string },
+    ) {
+      return {
+        id: Math.floor(Math.random() * 100000),
+        date: new Date(),
+        text: args.caption ?? "",
+        sender: { displayName: "Mock User" },
+        chat: { displayName: "Mock Chat" },
+        media: { type: args.type },
+      };
+    },
+
     // Stubs for connect/importSession/call/getMe used in telegram.ts
     async connect() {},
     async importSession(_session: string) {},

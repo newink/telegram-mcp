@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { BlockList, isIP } from "node:net";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -6,6 +7,7 @@ import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
 import { isChatAllowed, loadConfig } from "./config.ts";
 import { log } from "./logger.ts";
+import type { TelegramSendChatId, TelegramSendMediaArgs } from "./telegram.ts";
 import {
   closeTelegramClient,
   getTelegramClient,
@@ -568,6 +570,78 @@ function registerTools(server: McpServer) {
           mediaType: msg.media.type,
           message: formatMessage(msg),
         });
+      });
+    },
+  );
+
+  server.tool(
+    "send_message",
+    "Send a text message to a Telegram chat. Requires explicit opt-in in bot-data/config.yml.",
+    {
+      chatId: z
+        .string()
+        .describe('Numeric chat ID (as string), @username, or "me" for Saved Messages'),
+      text: z.string().min(1).describe("Message text"),
+      disableWebPreview: z
+        .boolean()
+        .default(true)
+        .describe("Disable link previews (default: true)"),
+    },
+    async ({ chatId: rawChatId, text, disableWebPreview }) => {
+      if (!isChatAllowed("send_message", rawChatId)) {
+        const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        throw new Error(
+          `send_message is not allowed for chat "${rawChatId}". ` +
+            `Add it to allowed_chats in ${configPath}.`,
+        );
+      }
+
+      const chatId = parseChatId(rawChatId);
+      const tg = await getTelegramClient();
+      const msg = await tg.sendText(chatId as TelegramSendChatId, text, { disableWebPreview });
+
+      return jsonResponse({
+        chatId,
+        message: formatMessage(msg),
+      });
+    },
+  );
+
+  server.tool(
+    "send_file",
+    "Send a local file to a Telegram chat as a document. Requires explicit opt-in in bot-data/config.yml.",
+    {
+      chatId: z
+        .string()
+        .describe('Numeric chat ID (as string), @username, or "me" for Saved Messages'),
+      filePath: z.string().min(1).describe("Local file path"),
+      caption: z.string().optional().describe("Optional caption"),
+    },
+    async ({ chatId: rawChatId, filePath, caption }) => {
+      if (!isChatAllowed("send_file", rawChatId)) {
+        const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        throw new Error(
+          `send_file is not allowed for chat "${rawChatId}". ` +
+            `Add it to allowed_chats in ${configPath}.`,
+        );
+      }
+
+      if (!existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
+      }
+
+      const chatId = parseChatId(rawChatId);
+      const tg = await getTelegramClient();
+      const msg = await tg.sendMedia(chatId as TelegramSendChatId, {
+        type: "document",
+        file: filePath,
+        caption: caption ?? undefined,
+      } satisfies TelegramSendMediaArgs);
+
+      return jsonResponse({
+        chatId,
+        filePath,
+        message: formatMessage(msg),
       });
     },
   );
