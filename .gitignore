@@ -22,7 +22,7 @@
 .env.test.local
 .eslintcache
 .idea
-_.log
+*.log
 
 bot-data/*
 !bot-data/config.example.yml
@@ -33,4 +33,3 @@ logs
 mcp-server.log
 node_modules
 out
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
