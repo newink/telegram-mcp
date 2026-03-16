@@ -357,10 +357,7 @@ export function buildAuthUrl(context: RequestContext): string {
 
 function logStartupAuthRequired(port: number, reason?: string): void {
   const token = ensureSetupToken();
-  const authUrl = new URL(
-    "/auth",
-    getPublicBaseUrl() ?? new URL(`http://localhost:${port}`),
-  );
+  const authUrl = new URL("/auth", getPublicBaseUrl() ?? new URL(`http://localhost:${port}`));
   authUrl.searchParams.set("token", token);
   const authPath = authUrl.toString();
   log.warn({ authPath, reason }, "auth required — open the web auth page to connect Telegram");
