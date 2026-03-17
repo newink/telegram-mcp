@@ -4,6 +4,8 @@ import { loadEnv, saveEnv } from "./env.ts";
 import { log } from "./logger.ts";
 
 const AUTH_CLEANUP_TIMEOUT_MS = 10_000;
+const DEFAULT_KEEPALIVE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const AUTHORIZATION_TTL_DAYS = 365;
 
 export const TERMINAL_AUTH_TEXTS = new Set([
   "AUTH_KEY_UNREGISTERED",
@@ -32,6 +34,7 @@ let authCleanupPromise: Promise<void> | null = null;
 let currentSession: string | null = null;
 let authRevokedState: AuthRevokedState | null = null;
 let cleanupTimeoutMs = AUTH_CLEANUP_TIMEOUT_MS;
+let keepaliveTimer: Timer | null = null;
 
 export class TelegramSessionExpiredError extends Error {
   constructor(
@@ -99,6 +102,55 @@ async function waitForAuthCleanup(cleanup: Promise<void>): Promise<void> {
   }
 }
 
+function getKeepaliveIntervalMs(): number {
+  const env = process.env.KEEPALIVE_INTERVAL_MS;
+  if (env) {
+    const n = Number(env);
+    if (!Number.isNaN(n) && n > 0) return n;
+    log.warn({ value: env }, "invalid KEEPALIVE_INTERVAL_MS, using default");
+  }
+  return DEFAULT_KEEPALIVE_INTERVAL_MS;
+}
+
+async function setMaxAuthorizationTTL(current: TelegramClient): Promise<void> {
+  try {
+    await current.call({
+      _: "account.setAuthorizationTTL",
+      authorizationTtlDays: AUTHORIZATION_TTL_DAYS,
+    });
+    log.info({ ttlDays: AUTHORIZATION_TTL_DAYS }, "set authorization TTL");
+  } catch (err) {
+    log.warn({ err }, "failed to set authorization TTL (non-fatal)");
+  }
+}
+
+function stopKeepalive(): void {
+  if (keepaliveTimer) {
+    clearInterval(keepaliveTimer);
+    keepaliveTimer = null;
+  }
+}
+
+function startKeepalive(current: TelegramClient): void {
+  stopKeepalive();
+  const intervalMs = getKeepaliveIntervalMs();
+
+  keepaliveTimer = setInterval(async () => {
+    if (authRevokedState || authCleanupPromise) return;
+    try {
+      await current.getMe();
+      log.debug("session keepalive ok");
+    } catch (err) {
+      log.warn({ err }, "session keepalive failed");
+    }
+  }, intervalMs);
+
+  if (keepaliveTimer && typeof keepaliveTimer.unref === "function") {
+    keepaliveTimer.unref();
+  }
+  log.info({ intervalMs }, "session keepalive started");
+}
+
 export function attachAuthExpiryHandler(current: TelegramClient): void {
   current.onError.add((err) => {
     const reason = getAuthFailureReason(err);
@@ -128,6 +180,8 @@ export async function autoLogoutCurrentSession(
   const revokedAt = new Date().toISOString();
 
   const cleanup = (async () => {
+    stopKeepalive();
+
     authRevokedState = {
       reason,
       revokedAt,
@@ -198,6 +252,7 @@ export async function autoLogoutCurrentSession(
 }
 
 export async function closeTelegramClient(): Promise<void> {
+  stopKeepalive();
   if (authCleanupPromise) {
     await authCleanupPromise;
     return;
@@ -275,6 +330,8 @@ export async function getTelegramClient(): Promise<TelegramClient> {
     log.info("connected to telegram");
 
     currentSession = session;
+    void setMaxAuthorizationTTL(current);
+    startKeepalive(current);
     return current;
   } catch (err) {
     if (client === current) {
@@ -343,6 +400,7 @@ export async function withTelegramClient<T>(
 }
 
 export function resetTelegramState(): void {
+  stopKeepalive();
   client = null;
   authCleanupPromise = null;
   currentSession = null;
@@ -364,4 +422,8 @@ export function setCurrentSessionForTests(session: string | null): void {
 
 export function setCleanupTimeoutMsForTests(timeoutMs: number): void {
   cleanupTimeoutMs = timeoutMs;
+}
+
+export function getKeepaliveTimerForTests(): Timer | null {
+  return keepaliveTimer;
 }

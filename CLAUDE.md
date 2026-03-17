@@ -66,6 +66,7 @@ TELEGRAM_MOCK=true bun test
 | `PORT` | No | Server port (default: 3000) |
 | `TELEGRAM_MOCK` | No | Set to `true` for mock mode |
 | `TELEGRAM_MCP_CONFIG` | No | Config file path (default: `bot-data/config.yml`) |
+| `KEEPALIVE_INTERVAL_MS` | No | Session keepalive interval in ms (default: 21600000 / 6h) |
 
 *Not required when `TELEGRAM_MOCK=true`.
 

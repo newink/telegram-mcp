@@ -134,8 +134,14 @@ export function createMockClient() {
       // no-op in mock
     },
 
-    // Stub for connect/importSession used in telegram.ts
+    // Stubs for connect/importSession/call/getMe used in telegram.ts
     async connect() {},
     async importSession(_session: string) {},
+    async call(_request: unknown) {
+      return {};
+    },
+    async getMe() {
+      return { id: 100001, displayName: "Mock User", username: "mockuser" };
+    },
   };
 }
