@@ -590,9 +590,13 @@ function registerTools(server: McpServer) {
     async ({ chatId: rawChatId, text, disableWebPreview }) => {
       if (!isChatAllowed("send_message", rawChatId)) {
         const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        log.warn(
+          { configPath, tool: "send_message", chatId: rawChatId },
+          "chat not in allowed_chats",
+        );
         throw new Error(
           `send_message is not allowed for chat "${rawChatId}". ` +
-            `Add it to allowed_chats in ${configPath}.`,
+            "Add it to allowed_chats in the config.",
         );
       }
 
@@ -621,14 +625,16 @@ function registerTools(server: McpServer) {
     async ({ chatId: rawChatId, filePath, caption }) => {
       if (!isChatAllowed("send_file", rawChatId)) {
         const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        log.warn({ configPath, tool: "send_file", chatId: rawChatId }, "chat not in allowed_chats");
         throw new Error(
           `send_file is not allowed for chat "${rawChatId}". ` +
-            `Add it to allowed_chats in ${configPath}.`,
+            "Add it to allowed_chats in the config.",
         );
       }
 
       if (!existsSync(filePath)) {
-        throw new Error(`File not found: ${filePath}`);
+        log.warn({ filePath }, "send_file: file not found");
+        throw new Error("send_file: specified file does not exist");
       }
 
       const chatId = parseChatId(rawChatId);
@@ -641,7 +647,6 @@ function registerTools(server: McpServer) {
 
         return jsonResponse({
           chatId,
-          filePath,
           message: formatMessage(msg),
         });
       });
@@ -694,9 +699,13 @@ function registerTools(server: McpServer) {
     async ({ chatId: rawChatId, messageIds, revoke }) => {
       if (!isChatAllowed("delete_messages", rawChatId)) {
         const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        log.warn(
+          { configPath, tool: "delete_messages", chatId: rawChatId },
+          "chat not in allowed_chats",
+        );
         throw new Error(
           `delete_messages is not allowed for chat "${rawChatId}". ` +
-            `Add it to allowed_chats in ${configPath}.`,
+            "Add it to allowed_chats in the config.",
         );
       }
 
