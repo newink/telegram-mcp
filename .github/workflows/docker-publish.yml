@@ -1,9 +1,12 @@
 name: Docker Publish
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. v1.2.3). Defaults to short SHA."
+        required: false
+        default: ""
 
 jobs:
   docker:
@@ -34,18 +37,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: |
-            docker.io/newink/telegram-mcp
-            ghcr.io/newink/telegram-mcp
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-,format=short
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+      - name: Compute tags
+        id: tags
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tags=docker.io/newink/telegram-mcp:${{ github.event.inputs.tag }},ghcr.io/newink/telegram-mcp:${{ github.event.inputs.tag }},docker.io/newink/telegram-mcp:sha-${SHA},ghcr.io/newink/telegram-mcp:sha-${SHA}" >> $GITHUB_OUTPUT
+          else
+            echo "tags=docker.io/newink/telegram-mcp:sha-${SHA},ghcr.io/newink/telegram-mcp:sha-${SHA}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -53,7 +53,6 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
