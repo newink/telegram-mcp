@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type TelegramClient, tl } from "@mtcute/bun";
+import { TelegramClient, tl } from "@mtcute/bun";
 import {
   attachAuthExpiryHandler,
   autoLogoutCurrentSession,
@@ -182,6 +182,7 @@ describe("telegram auth revoke", () => {
   });
 
   afterEach(() => {
+    mock.restore();
     resetTelegramState();
     resetSetupTokenForTests();
     process.chdir(ORIGINAL_CWD);
@@ -253,6 +254,37 @@ describe("telegram auth revoke", () => {
         revokedAt: "2026-03-11T00:00:00.000Z",
       }),
     );
+  });
+
+  it("treats invalid session import strings as auth-required and clears runtime session state", async () => {
+    process.env.TELEGRAM_API_ID = "123456";
+    process.env.TELEGRAM_API_HASH = "test-api-hash";
+    writeRuntimeArtifacts("invalid-session");
+
+    const importSessionSpy = spyOn(TelegramClient.prototype, "importSession").mockImplementation(
+      async () => {
+        throw new Error("Invalid session string (version = 212)");
+      },
+    );
+    const connectSpy = spyOn(TelegramClient.prototype, "connect").mockImplementation(async () => {
+      throw new Error("connect should not be called");
+    });
+    const destroySpy = spyOn(TelegramClient.prototype, "destroy").mockImplementation(async () => {
+      return undefined as never;
+    });
+
+    await expect(getTelegramClient()).rejects.toEqual(
+      expect.objectContaining({
+        name: "TelegramSessionExpiredError",
+        reason: "invalid_session_string",
+      }),
+    );
+
+    expect(importSessionSpy).toHaveBeenCalledWith("invalid-session");
+    expect(connectSpy).not.toHaveBeenCalled();
+    expect(destroySpy).toHaveBeenCalledTimes(1);
+    expectRuntimeArtifactsRemoved();
+    expectAuthArtifactsRemain();
   });
 
   it("times out while waiting for auth cleanup to finish", async () => {
@@ -365,6 +397,7 @@ describe("session keepalive", () => {
   });
 
   afterEach(() => {
+    mock.restore();
     resetTelegramState();
     for (const key of ENV_KEYS) {
       const value = originalEnv[key];
