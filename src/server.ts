@@ -7,13 +7,15 @@ import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
 import { isChatAllowed, loadConfig } from "./config.ts";
 import { log } from "./logger.ts";
-import type { TelegramSendChatId, TelegramSendMediaArgs } from "./telegram.ts";
+import type { TelegramSendMediaArgs } from "./telegram.ts";
 import {
   closeTelegramClient,
   getTelegramClient,
   isSessionConfigured,
   isTelegramAuthRequiredError,
   TelegramSessionExpiredError,
+  toMtcuteChatId,
+  toMtcuteSendChatId,
   withTelegramClient,
 } from "./telegram.ts";
 import {
@@ -369,8 +371,8 @@ function logStartupAuthRequired(port: number, reason?: string): void {
   log.warn({ authPath, reason }, "auth required — open the web auth page to connect Telegram");
 }
 
-export function parseChatId(chatId: string): string | number {
-  return /^-?\d+$/.test(chatId) ? Number(chatId) : chatId;
+export function parseChatId(chatId: string): string | bigint {
+  return /^-?\d+$/.test(chatId) ? BigInt(chatId) : chatId;
 }
 
 function registerTools(server: McpServer) {
@@ -432,6 +434,7 @@ function registerTools(server: McpServer) {
     },
     async ({ chatId: rawChatId, limit, minDate, maxDate, onlyUnread, markAsRead }) => {
       const chatId = parseChatId(rawChatId);
+      const telegramChatId = toMtcuteChatId(chatId);
       const parsedMinDate = parseIsoDate(minDate, "minDate");
       const parsedMaxDate = parseIsoDate(maxDate, "maxDate");
 
@@ -446,7 +449,7 @@ function registerTools(server: McpServer) {
         if (parsedMinDate || parsedMaxDate) {
           mode = "date_search";
           for await (const msg of tg.iterSearchMessages({
-            chatId,
+            chatId: telegramChatId,
             minDate: parsedMinDate,
             maxDate: parsedMaxDate,
             limit,
@@ -455,25 +458,25 @@ function registerTools(server: McpServer) {
           }
         } else if (onlyUnread) {
           mode = "unread";
-          const [dialog] = await tg.getPeerDialogs([chatId]);
+          const [dialog] = await tg.getPeerDialogs([telegramChatId]);
           if (!dialog) {
             throw new Error(`Dialog not found for chatId: ${chatId}`);
           }
 
-          for await (const msg of tg.iterHistory(chatId, {
+          for await (const msg of tg.iterHistory(telegramChatId, {
             minId: dialog.lastReadIngoing,
             limit,
           })) {
             fetched.push(msg);
           }
         } else {
-          for await (const msg of tg.iterHistory(chatId, { limit })) {
+          for await (const msg of tg.iterHistory(telegramChatId, { limit })) {
             fetched.push(msg);
           }
         }
 
         if (markAsRead) {
-          await tg.readHistory(chatId);
+          await tg.readHistory(telegramChatId);
         }
 
         return jsonResponse({
@@ -505,6 +508,7 @@ function registerTools(server: McpServer) {
     },
     async ({ query, chatId: rawChatId, limit, minDate, maxDate }) => {
       const chatId = rawChatId ? parseChatId(rawChatId) : undefined;
+      const telegramChatId = chatId ? toMtcuteChatId(chatId) : undefined;
       const parsedMinDate = parseIsoDate(minDate, "minDate");
       const parsedMaxDate = parseIsoDate(maxDate, "maxDate");
 
@@ -515,7 +519,7 @@ function registerTools(server: McpServer) {
       return withTelegramClient(async (tg) => {
         const messages: ReturnType<typeof formatMessage>[] = [];
         for await (const msg of tg.iterSearchMessages({
-          chatId,
+          chatId: telegramChatId,
           query,
           minDate: parsedMinDate,
           maxDate: parsedMaxDate,
@@ -544,9 +548,10 @@ function registerTools(server: McpServer) {
     },
     async ({ chatId: rawChatId, messageId, filename }) => {
       const chatId = parseChatId(rawChatId);
+      const telegramChatId = toMtcuteChatId(chatId);
 
       return withTelegramClient(async (tg) => {
-        const [msg] = await tg.getMessages(chatId, [messageId]);
+        const [msg] = await tg.getMessages(telegramChatId, [messageId]);
 
         if (!msg) {
           throw new Error(`Message not found: ${chatId}/${messageId}`);
@@ -602,7 +607,9 @@ function registerTools(server: McpServer) {
 
       const chatId = parseChatId(rawChatId);
       return withTelegramClient(async (tg) => {
-        const msg = await tg.sendText(chatId as TelegramSendChatId, text, { disableWebPreview });
+        const msg = await tg.sendText(toMtcuteSendChatId(chatId), text, {
+          disableWebPreview,
+        });
 
         return jsonResponse({
           chatId,
@@ -639,7 +646,7 @@ function registerTools(server: McpServer) {
 
       const chatId = parseChatId(rawChatId);
       return withTelegramClient(async (tg) => {
-        const msg = await tg.sendMedia(chatId as TelegramSendChatId, {
+        const msg = await tg.sendMedia(toMtcuteSendChatId(chatId), {
           type: "document",
           file: filePath,
           caption: caption ?? undefined,
@@ -711,7 +718,7 @@ function registerTools(server: McpServer) {
 
       const chatId = parseChatId(rawChatId);
       return withTelegramClient(async (tg) => {
-        await tg.deleteMessagesById(chatId, messageIds, { revoke });
+        await tg.deleteMessagesById(toMtcuteChatId(chatId), messageIds, { revoke });
 
         return jsonResponse({
           chatId,

@@ -131,7 +131,7 @@ Send a local file to a Telegram chat as a document. Write tool — requires conf
 | filePath | string | yes | Local file path |
 | caption | string | no | Optional caption |
 
-**Returns:** `{ chatId, filePath, message }`
+**Returns:** `{ chatId, message }`
 
 **Config required:**
 

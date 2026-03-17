@@ -5,10 +5,15 @@
 
 import { MOCK_CHATS, type MockChat, type MockMessage } from "./fixtures.ts";
 
-function findChat(chatId: string | number): MockChat | undefined {
+type MockChatId = string | number | bigint;
+
+function findChat(chatId: MockChatId): MockChat | undefined {
   if (typeof chatId === "string") {
     const username = chatId.replace(/^@/, "");
     return MOCK_CHATS.find((c) => c.username === username);
+  }
+  if (typeof chatId === "bigint") {
+    return MOCK_CHATS.find((c) => BigInt(c.id) === chatId);
   }
   return MOCK_CHATS.find((c) => c.id === chatId);
 }
@@ -46,7 +51,7 @@ export function createMockClient() {
       }
     },
 
-    async *iterHistory(chatId: string | number, opts?: { limit?: number; minId?: number }) {
+    async *iterHistory(chatId: MockChatId, opts?: { limit?: number; minId?: number }) {
       const chat = findChat(chatId);
       if (!chat) return;
       let messages = [...chat.messages].reverse(); // newest first
@@ -61,7 +66,7 @@ export function createMockClient() {
     },
 
     async *iterSearchMessages(opts?: {
-      chatId?: string | number;
+      chatId?: MockChatId;
       query?: string;
       minDate?: Date;
       maxDate?: Date;
@@ -83,7 +88,7 @@ export function createMockClient() {
       }
     },
 
-    async getPeerDialogs(chatIds: (string | number)[]) {
+    async getPeerDialogs(chatIds: MockChatId[]) {
       return chatIds.map((id) => {
         const chat = findChat(id);
         if (!chat) return undefined;
@@ -94,11 +99,11 @@ export function createMockClient() {
       });
     },
 
-    async readHistory(_chatId: string | number) {
+    async readHistory(_chatId: MockChatId) {
       // no-op in mock
     },
 
-    async getMessages(chatId: string | number, messageIds: number[]) {
+    async getMessages(chatId: MockChatId, messageIds: number[]) {
       const chat = findChat(chatId);
       if (!chat) return messageIds.map(() => null);
       return messageIds.map((id) => {
@@ -127,18 +132,14 @@ export function createMockClient() {
     },
 
     async deleteMessagesById(
-      _chatId: string | number,
+      _chatId: MockChatId,
       _messageIds: number[],
       _opts?: { revoke?: boolean },
     ) {
       // no-op in mock
     },
 
-    async sendText(
-      _chatId: string | number,
-      text: string,
-      _opts?: { disableWebPreview?: boolean },
-    ) {
+    async sendText(_chatId: MockChatId, text: string, _opts?: { disableWebPreview?: boolean }) {
       return {
         id: Math.floor(Math.random() * 100000),
         date: new Date(),
@@ -149,10 +150,7 @@ export function createMockClient() {
       };
     },
 
-    async sendMedia(
-      _chatId: string | number,
-      args: { type: string; file: string; caption?: string },
-    ) {
+    async sendMedia(_chatId: MockChatId, args: { type: string; file: string; caption?: string }) {
       return {
         id: Math.floor(Math.random() * 100000),
         date: new Date(),

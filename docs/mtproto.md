@@ -35,7 +35,7 @@ Telegram rate-limits aggressively. Any API call can return `FLOOD_WAIT_X` (wait 
 - Channels: negative numbers prefixed with -100
 - Usernames: `@username` strings
 
-`parseChatId()` in server.ts handles string→number conversion.
+`parseChatId()` in server.ts converts digit-only chat IDs to `bigint` and preserves usernames as strings.
 
 ### bigint IDs
 Some Telegram IDs are `bigint`. JSON.stringify fails on bigint. Always use `jsonResponse()` helper which converts bigint to string.
