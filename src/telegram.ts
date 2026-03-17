@@ -38,12 +38,16 @@ let cleanupTimeoutMs = AUTH_CLEANUP_TIMEOUT_MS;
 let keepaliveTimer: Timer | null = null;
 let keepaliveRunId = 0;
 const INVALID_SESSION_REASON = "invalid_session_string";
-const INVALID_SESSION_ERROR_PATTERNS = [
-  "Invalid session string",
-  "MalformedSession",
-  "InvalidSession",
-  "UnsupportedSessionVersion",
-] as const;
+const INVALID_SESSION_ERROR_NAMES = new Set([
+  "invalidsession",
+  "malformedsession",
+  "unsupportedsessionversion",
+]);
+const INVALID_SESSION_MESSAGE_PATTERNS = [
+  /invalid session/i,
+  /malformed session/i,
+  /unsupported session/i,
+];
 
 type TelegramClientFactory = (
   options: ConstructorParameters<typeof TelegramClient>[0],
@@ -74,11 +78,18 @@ export function getAuthFailureReason(err: unknown): string | null {
 }
 
 function isInvalidSessionError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
+  if (typeof err !== "object" || err === null) return false;
+  const error = err as { message?: unknown; name?: unknown };
 
-  return INVALID_SESSION_ERROR_PATTERNS.some(
-    (pattern) => err.name === pattern || err.message.includes(pattern),
-  );
+  const name = typeof error.name === "string" ? error.name.toLowerCase() : null;
+  if (name && INVALID_SESSION_ERROR_NAMES.has(name)) {
+    return true;
+  }
+
+  const message = typeof error.message === "string" ? error.message : null;
+  return message
+    ? INVALID_SESSION_MESSAGE_PATTERNS.some((pattern) => pattern.test(message))
+    : false;
 }
 
 function isUnknownAuthRpcError(err: unknown): err is tl.RpcError {
@@ -125,11 +136,7 @@ async function clearRuntimeSessionArtifacts(): Promise<void> {
     }
   }
 
-  try {
-    delete process.env.TELEGRAM_SESSION;
-  } catch (err) {
-    log.warn({ err }, "failed to remove TELEGRAM_SESSION from process env");
-  }
+  delete process.env.TELEGRAM_SESSION;
 
   try {
     await rm("bot-data/session", { force: true });

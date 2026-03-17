@@ -52,6 +52,12 @@ type FakeClient = {
   emit(err: unknown): void;
 };
 
+type FakeBootstrapClientOptions = {
+  connect?(): Promise<void>;
+  destroy?(): Promise<void>;
+  importSession?(session: string): Promise<void>;
+};
+
 function createDeferred<T>(): Deferred<T> {
   let resolve!: Deferred<T>["resolve"];
   let reject!: Deferred<T>["reject"];
@@ -127,6 +133,24 @@ function createFakeClient(options?: {
       }
     },
   };
+}
+
+function fakeTelegramClientFactory(options?: FakeBootstrapClientOptions): () => TelegramClient {
+  return () =>
+    ({
+      async connect() {
+        await options?.connect?.();
+      },
+      async destroy() {
+        await options?.destroy?.();
+      },
+      async importSession(session: string) {
+        await options?.importSession?.(session);
+      },
+      onError: {
+        add() {},
+      },
+    }) as unknown as TelegramClient;
 }
 
 function writeRuntimeArtifacts(session = "revoked-session"): void {
@@ -272,21 +296,17 @@ describe("telegram auth revoke", () => {
     const destroy = mock(async () => undefined);
 
     setTelegramClientFactoryForTests(
-      () =>
-        ({
-          async connect() {
-            return await connect();
-          },
-          async destroy() {
-            return await destroy();
-          },
-          async importSession(session: string) {
-            return await importSession(session);
-          },
-          onError: {
-            add() {},
-          },
-        }) as unknown as TelegramClient,
+      fakeTelegramClientFactory({
+        async connect() {
+          await connect();
+        },
+        async destroy() {
+          await destroy();
+        },
+        async importSession(session: string) {
+          await importSession(session);
+        },
+      }),
     );
 
     await expect(getTelegramClient()).rejects.toEqual(
@@ -315,22 +335,18 @@ describe("telegram auth revoke", () => {
     const destroy = mock(async () => undefined);
 
     setTelegramClientFactoryForTests(
-      () =>
-        ({
-          async connect() {
-            return await connect();
-          },
-          async destroy() {
-            return await destroy();
-          },
-          async importSession(session: string) {
-            expect(session).toBe("still-valid-session");
-            return await importSession();
-          },
-          onError: {
-            add() {},
-          },
-        }) as unknown as TelegramClient,
+      fakeTelegramClientFactory({
+        async connect() {
+          await connect();
+        },
+        async destroy() {
+          await destroy();
+        },
+        async importSession(session: string) {
+          expect(session).toBe("still-valid-session");
+          await importSession();
+        },
+      }),
     );
 
     await expect(getTelegramClient()).rejects.toThrow("storage backend unavailable");
