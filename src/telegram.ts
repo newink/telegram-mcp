@@ -102,11 +102,13 @@ async function waitForAuthCleanup(cleanup: Promise<void>): Promise<void> {
   }
 }
 
+const MAX_SAFE_TIMER_MS = 2 ** 31 - 1; // setTimeout/setInterval max safe delay
+
 function getKeepaliveIntervalMs(): number {
   const env = process.env.KEEPALIVE_INTERVAL_MS;
   if (env) {
     const n = Number(env);
-    if (!Number.isNaN(n) && n > 0) return n;
+    if (Number.isFinite(n) && n > 0 && n <= MAX_SAFE_TIMER_MS) return n;
     log.warn({ value: env }, "invalid KEEPALIVE_INTERVAL_MS, using default");
   }
   return DEFAULT_KEEPALIVE_INTERVAL_MS;
@@ -126,7 +128,7 @@ async function setMaxAuthorizationTTL(current: TelegramClient): Promise<void> {
 
 function stopKeepalive(): void {
   if (keepaliveTimer) {
-    clearInterval(keepaliveTimer);
+    clearTimeout(keepaliveTimer);
     keepaliveTimer = null;
   }
 }
@@ -135,19 +137,28 @@ function startKeepalive(current: TelegramClient): void {
   stopKeepalive();
   const intervalMs = getKeepaliveIntervalMs();
 
-  keepaliveTimer = setInterval(async () => {
-    if (authRevokedState || authCleanupPromise) return;
-    try {
-      await current.getMe();
-      log.debug("session keepalive ok");
-    } catch (err) {
-      log.warn({ err }, "session keepalive failed");
-    }
-  }, intervalMs);
+  function scheduleNext(): void {
+    keepaliveTimer = setTimeout(async () => {
+      if (authRevokedState || authCleanupPromise) {
+        scheduleNext();
+        return;
+      }
+      try {
+        await current.getMe();
+        log.debug("session keepalive ok");
+      } catch (err) {
+        log.warn({ err }, "session keepalive failed");
+      }
+      // Schedule next only after current probe completes
+      if (keepaliveTimer) scheduleNext();
+    }, intervalMs);
 
-  if (keepaliveTimer && typeof keepaliveTimer.unref === "function") {
-    keepaliveTimer.unref();
+    if (keepaliveTimer && typeof keepaliveTimer.unref === "function") {
+      keepaliveTimer.unref();
+    }
   }
+
+  scheduleNext();
   log.info({ intervalMs }, "session keepalive started");
 }
 
