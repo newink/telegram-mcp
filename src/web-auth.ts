@@ -102,9 +102,6 @@ export function handleAuthStatus(_req: Request, url: URL): Response {
   const stream = new ReadableStream({
     start(controller) {
       sseControllers.add(controller);
-      // Send initial waiting event
-      const data = `data: ${JSON.stringify({ type: "waiting" })}\n\n`;
-      controller.enqueue(new TextEncoder().encode(data));
     },
     cancel(controller) {
       sseControllers.delete(controller);

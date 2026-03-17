@@ -596,7 +596,7 @@ export function getAuthPageHtml(token: string): string {
     function handleEvent(ev) {
       switch (ev.type) {
         case 'waiting':
-          if (currentStep === 'qr') {
+          if (currentStep === 'qr' && document.getElementById('qr-img').style.display !== 'none') {
             document.getElementById('qr-status').innerHTML =
               '<span class="spinner" style="color:var(--neon);width:14px;height:14px;border-width:1.5px"></span>' +
               '<span style="font-size:11px;font-family:Share Tech Mono,monospace;color:var(--text)">SCANNED \\u2014 CONNECTING\\u2026</span>';
