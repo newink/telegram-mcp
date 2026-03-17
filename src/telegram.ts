@@ -38,6 +38,20 @@ let cleanupTimeoutMs = AUTH_CLEANUP_TIMEOUT_MS;
 let keepaliveTimer: Timer | null = null;
 let keepaliveRunId = 0;
 const INVALID_SESSION_REASON = "invalid_session_string";
+const INVALID_SESSION_ERROR_PATTERNS = [
+  "Invalid session string",
+  "MalformedSession",
+  "InvalidSession",
+  "UnsupportedSessionVersion",
+] as const;
+
+type TelegramClientFactory = (
+  options: ConstructorParameters<typeof TelegramClient>[0],
+) => TelegramClient;
+
+const defaultTelegramClientFactory: TelegramClientFactory = (options) =>
+  new TelegramClient(options);
+let telegramClientFactory: TelegramClientFactory = defaultTelegramClientFactory;
 
 export class TelegramSessionExpiredError extends Error {
   constructor(
@@ -57,6 +71,14 @@ export function isSessionConfigured(): boolean {
 export function getAuthFailureReason(err: unknown): string | null {
   if (!tl.RpcError.is(err)) return null;
   return TERMINAL_AUTH_TEXTS.has(err.text) ? err.text : null;
+}
+
+function isInvalidSessionError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+
+  return INVALID_SESSION_ERROR_PATTERNS.some(
+    (pattern) => err.name === pattern || err.message.includes(pattern),
+  );
 }
 
 function isUnknownAuthRpcError(err: unknown): err is tl.RpcError {
@@ -362,7 +384,7 @@ export async function getTelegramClient(): Promise<TelegramClient> {
     throw new Error("TELEGRAM_SESSION env var is required. Run `bun auth` first.");
   }
 
-  const current = new TelegramClient({
+  const current = telegramClientFactory({
     apiId,
     apiHash,
     storage: "bot-data/session",
@@ -377,7 +399,7 @@ export async function getTelegramClient(): Promise<TelegramClient> {
     try {
       await current.importSession(session);
     } catch (err) {
-      if (!tl.RpcError.is(err)) {
+      if (!tl.RpcError.is(err) && isInvalidSessionError(err)) {
         const revokedAt = new Date().toISOString();
         const revokedSession = session;
 
@@ -495,6 +517,7 @@ export function resetTelegramState(): void {
   currentSession = null;
   authRevokedState = null;
   cleanupTimeoutMs = AUTH_CLEANUP_TIMEOUT_MS;
+  telegramClientFactory = defaultTelegramClientFactory;
 }
 
 export function setAuthCleanupPromiseForTests(cleanup: Promise<void> | null): void {
@@ -511,6 +534,10 @@ export function setCurrentSessionForTests(session: string | null): void {
 
 export function setCleanupTimeoutMsForTests(timeoutMs: number): void {
   cleanupTimeoutMs = timeoutMs;
+}
+
+export function setTelegramClientFactoryForTests(factory: TelegramClientFactory | null): void {
+  telegramClientFactory = factory ?? defaultTelegramClientFactory;
 }
 
 export function getKeepaliveTimerForTests(): Timer | null {

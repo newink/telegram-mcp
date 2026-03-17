@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TelegramClient, tl } from "@mtcute/bun";
+import { type TelegramClient, tl } from "@mtcute/bun";
 import {
   attachAuthExpiryHandler,
   autoLogoutCurrentSession,
@@ -14,6 +14,7 @@ import {
   setAuthRevokedStateForTests,
   setCleanupTimeoutMsForTests,
   setCurrentSessionForTests,
+  setTelegramClientFactoryForTests,
   TERMINAL_AUTH_TEXTS,
   TelegramSessionExpiredError,
 } from "./telegram.ts";
@@ -261,17 +262,32 @@ describe("telegram auth revoke", () => {
     process.env.TELEGRAM_API_HASH = "test-api-hash";
     writeRuntimeArtifacts("invalid-session");
 
-    const importSessionSpy = spyOn(TelegramClient.prototype, "importSession").mockImplementation(
-      async () => {
-        throw new Error("Invalid session string (version = 212)");
-      },
-    );
-    const connectSpy = spyOn(TelegramClient.prototype, "connect").mockImplementation(async () => {
+    const importSession = mock(async (session: string) => {
+      expect(session).toBe("invalid-session");
+      throw new Error("Invalid session string (version = 212)");
+    });
+    const connect = mock(async () => {
       throw new Error("connect should not be called");
     });
-    const destroySpy = spyOn(TelegramClient.prototype, "destroy").mockImplementation(async () => {
-      return undefined as never;
-    });
+    const destroy = mock(async () => undefined);
+
+    setTelegramClientFactoryForTests(
+      () =>
+        ({
+          async connect() {
+            return await connect();
+          },
+          async destroy() {
+            return await destroy();
+          },
+          async importSession(session: string) {
+            return await importSession(session);
+          },
+          onError: {
+            add() {},
+          },
+        }) as unknown as TelegramClient,
+    );
 
     await expect(getTelegramClient()).rejects.toEqual(
       expect.objectContaining({
@@ -280,10 +296,55 @@ describe("telegram auth revoke", () => {
       }),
     );
 
-    expect(importSessionSpy).toHaveBeenCalledWith("invalid-session");
-    expect(connectSpy).not.toHaveBeenCalled();
-    expect(destroySpy).toHaveBeenCalledTimes(1);
+    expect(importSession).toHaveBeenCalledTimes(1);
+    expect(connect).not.toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalledTimes(1);
     expectRuntimeArtifactsRemoved();
+    expectAuthArtifactsRemain();
+  });
+
+  it("rethrows unrelated importSession failures without clearing runtime session state", async () => {
+    process.env.TELEGRAM_API_ID = "123456";
+    process.env.TELEGRAM_API_HASH = "test-api-hash";
+    writeRuntimeArtifacts("still-valid-session");
+
+    const importSession = mock(async () => {
+      throw new Error("storage backend unavailable");
+    });
+    const connect = mock(async () => undefined);
+    const destroy = mock(async () => undefined);
+
+    setTelegramClientFactoryForTests(
+      () =>
+        ({
+          async connect() {
+            return await connect();
+          },
+          async destroy() {
+            return await destroy();
+          },
+          async importSession(session: string) {
+            expect(session).toBe("still-valid-session");
+            return await importSession();
+          },
+          onError: {
+            add() {},
+          },
+        }) as unknown as TelegramClient,
+    );
+
+    await expect(getTelegramClient()).rejects.toThrow("storage backend unavailable");
+
+    expect(importSession).toHaveBeenCalledTimes(1);
+    expect(connect).not.toHaveBeenCalled();
+    expect(destroy).not.toHaveBeenCalled();
+    expect(process.env.TELEGRAM_SESSION).toBe("still-valid-session");
+    expect(existsSync("bot-data/session")).toBe(true);
+    expect(existsSync("bot-data/session-wal")).toBe(true);
+    expect(existsSync("bot-data/session-shm")).toBe(true);
+    expect(readFileSync(process.env.ENV_FILE!, "utf8")).toBe(
+      "TELEGRAM_SESSION=still-valid-session\nKEEP=1\n",
+    );
     expectAuthArtifactsRemain();
   });
 
