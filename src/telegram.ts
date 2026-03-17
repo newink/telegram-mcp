@@ -35,6 +35,7 @@ let currentSession: string | null = null;
 let authRevokedState: AuthRevokedState | null = null;
 let cleanupTimeoutMs = AUTH_CLEANUP_TIMEOUT_MS;
 let keepaliveTimer: Timer | null = null;
+let keepaliveRunId = 0;
 
 export class TelegramSessionExpiredError extends Error {
   constructor(
@@ -102,14 +103,24 @@ async function waitForAuthCleanup(cleanup: Promise<void>): Promise<void> {
   }
 }
 
+const MIN_KEEPALIVE_INTERVAL_MS = 60_000; // 1 minute floor
 const MAX_SAFE_TIMER_MS = 2 ** 31 - 1; // setTimeout/setInterval max safe delay
 
 function getKeepaliveIntervalMs(): number {
   const env = process.env.KEEPALIVE_INTERVAL_MS;
   if (env) {
     const n = Number(env);
-    if (Number.isFinite(n) && n > 0 && n <= MAX_SAFE_TIMER_MS) return n;
-    log.warn({ value: env }, "invalid KEEPALIVE_INTERVAL_MS, using default");
+    if (
+      Number.isFinite(n) &&
+      Number.isInteger(n) &&
+      n >= MIN_KEEPALIVE_INTERVAL_MS &&
+      n <= MAX_SAFE_TIMER_MS
+    )
+      return n;
+    log.warn(
+      { value: env, minMs: MIN_KEEPALIVE_INTERVAL_MS },
+      "invalid KEEPALIVE_INTERVAL_MS, using default",
+    );
   }
   return DEFAULT_KEEPALIVE_INTERVAL_MS;
 }
@@ -127,6 +138,7 @@ async function setMaxAuthorizationTTL(current: TelegramClient): Promise<void> {
 }
 
 function stopKeepalive(): void {
+  keepaliveRunId += 1;
   if (keepaliveTimer) {
     clearTimeout(keepaliveTimer);
     keepaliveTimer = null;
@@ -135,10 +147,13 @@ function stopKeepalive(): void {
 
 function startKeepalive(current: TelegramClient): void {
   stopKeepalive();
+  const runId = keepaliveRunId;
   const intervalMs = getKeepaliveIntervalMs();
 
   function scheduleNext(): void {
+    if (runId !== keepaliveRunId) return;
     keepaliveTimer = setTimeout(async () => {
+      if (runId !== keepaliveRunId) return;
       if (authRevokedState || authCleanupPromise) {
         scheduleNext();
         return;
@@ -149,8 +164,7 @@ function startKeepalive(current: TelegramClient): void {
       } catch (err) {
         log.warn({ err }, "session keepalive failed");
       }
-      // Schedule next only after current probe completes
-      if (keepaliveTimer) scheduleNext();
+      if (runId === keepaliveRunId) scheduleNext();
     }, intervalMs);
 
     if (keepaliveTimer && typeof keepaliveTimer.unref === "function") {
