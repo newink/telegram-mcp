@@ -7,6 +7,7 @@ import {
   attachAuthExpiryHandler,
   autoLogoutCurrentSession,
   getAuthFailureReason,
+  getKeepaliveTimerForTests,
   getTelegramClient,
   resetTelegramState,
   setAuthCleanupPromiseForTests,
@@ -39,8 +40,10 @@ type Deferred<T> = {
 
 type FakeClient = {
   calls: {
+    call: number;
     destroy: number;
     disconnect: number;
+    getMe: number;
     logOut: number;
     notifyLoggedOut: number;
   };
@@ -65,15 +68,19 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 function createFakeClient(options?: {
+  call?(): Promise<void>;
   destroy?(): Promise<void>;
   disconnect?(): Promise<void>;
+  getMe?(): Promise<void>;
   logOut?(): Promise<void>;
   notifyLoggedOut?(): Promise<void>;
 }): FakeClient {
   const listeners: Array<(err: unknown) => void> = [];
   const calls = {
+    call: 0,
     destroy: 0,
     disconnect: 0,
+    getMe: 0,
     logOut: 0,
     notifyLoggedOut: 0,
   };
@@ -81,6 +88,11 @@ function createFakeClient(options?: {
   return {
     calls,
     client: {
+      async call(_request: unknown) {
+        calls.call += 1;
+        await options?.call?.();
+        return {};
+      },
       async destroy() {
         calls.destroy += 1;
         await options?.destroy?.();
@@ -88,6 +100,11 @@ function createFakeClient(options?: {
       async disconnect() {
         calls.disconnect += 1;
         await options?.disconnect?.();
+      },
+      async getMe() {
+        calls.getMe += 1;
+        await options?.getMe?.();
+        return { id: 100001, displayName: "Fake User", username: "fakeuser" };
       },
       async logOut() {
         calls.logOut += 1;
@@ -332,5 +349,43 @@ describe("telegram auth revoke", () => {
     expectAuthArtifactsRemain();
 
     await expect(getTelegramClient()).rejects.toBeInstanceOf(TelegramSessionExpiredError);
+  });
+});
+
+describe("session keepalive", () => {
+  let originalEnv: Partial<Record<EnvKey, string | undefined>>;
+
+  beforeEach(() => {
+    originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+    resetTelegramState();
+    delete process.env.TELEGRAM_API_HASH;
+    delete process.env.TELEGRAM_API_ID;
+    delete process.env.TELEGRAM_MOCK;
+    delete process.env.TELEGRAM_SESSION;
+  });
+
+  afterEach(() => {
+    resetTelegramState();
+    for (const key of ENV_KEYS) {
+      const value = originalEnv[key];
+      if (typeof value === "string") {
+        process.env[key] = value;
+      } else {
+        delete process.env[key];
+      }
+    }
+  });
+
+  it("keepalive timer is null in mock mode", async () => {
+    process.env.TELEGRAM_MOCK = "true";
+    await getTelegramClient();
+    expect(getKeepaliveTimerForTests()).toBeNull();
+  });
+
+  it("resetTelegramState clears keepalive timer", async () => {
+    process.env.TELEGRAM_MOCK = "true";
+    await getTelegramClient();
+    resetTelegramState();
+    expect(getKeepaliveTimerForTests()).toBeNull();
   });
 });
