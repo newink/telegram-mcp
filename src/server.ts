@@ -371,8 +371,19 @@ function logStartupAuthRequired(port: number, reason?: string): void {
   log.warn({ authPath, reason }, "auth required — open the web auth page to connect Telegram");
 }
 
-export function parseChatId(chatId: string): string | bigint {
-  return /^-?\d+$/.test(chatId) ? BigInt(chatId) : chatId;
+export function parseChatId(chatId: string): string | number {
+  return /^-?\d+$/.test(chatId) ? Number(chatId) : chatId;
+}
+
+function sanitizeSendFileUploadError(err: unknown): Error {
+  if (typeof err === "object" && err !== null && "code" in err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EACCES" || code === "EPERM") {
+      return new Error("File upload failed: permission denied");
+    }
+  }
+
+  return new Error("File upload failed: internal error");
 }
 
 function registerTools(server: McpServer) {
@@ -646,11 +657,16 @@ function registerTools(server: McpServer) {
 
       const chatId = parseChatId(rawChatId);
       return withTelegramClient(async (tg) => {
-        const msg = await tg.sendMedia(toMtcuteSendChatId(chatId), {
-          type: "document",
-          file: filePath,
-          caption: caption ?? undefined,
-        } satisfies TelegramSendMediaArgs);
+        let msg: Awaited<ReturnType<typeof tg.sendMedia>>;
+        try {
+          msg = await tg.sendMedia(toMtcuteSendChatId(chatId), {
+            type: "document",
+            file: filePath,
+            caption: caption ?? undefined,
+          } satisfies TelegramSendMediaArgs);
+        } catch (err) {
+          throw sanitizeSendFileUploadError(err);
+        }
 
         return jsonResponse({
           chatId,

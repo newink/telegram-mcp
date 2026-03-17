@@ -151,6 +151,12 @@ export function createMockClient() {
     },
 
     async sendMedia(_chatId: MockChatId, args: { type: string; file: string; caption?: string }) {
+      if (args.file.includes("__mock_eacces__")) {
+        throw Object.assign(new Error(`EACCES: permission denied, open '${args.file}'`), {
+          code: "EACCES",
+        });
+      }
+
       return {
         id: Math.floor(Math.random() * 100000),
         date: new Date(),

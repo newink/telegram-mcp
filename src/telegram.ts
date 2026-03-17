@@ -304,9 +304,9 @@ export async function closeTelegramClient(): Promise<void> {
 type MtcuteChatId = Parameters<TelegramClient["iterHistory"]>[0];
 type MtcuteSendChatId = Parameters<TelegramClient["sendText"]>[0];
 
-// mtcute accepts int64 peer IDs at runtime, but its published TS types still model numeric peer IDs as number.
-export type TelegramChatId = MtcuteChatId | bigint;
-export type TelegramSendChatId = MtcuteSendChatId | bigint;
+// mtcute expects numeric peer IDs as number, even for channel/supergroup IDs.
+export type TelegramChatId = string | number;
+export type TelegramSendChatId = string | number;
 export type TelegramSendMediaArgs = Parameters<TelegramClient["sendMedia"]>[1];
 
 export function toMtcuteChatId(chatId: TelegramChatId): MtcuteChatId {
