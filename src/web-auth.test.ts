@@ -39,6 +39,8 @@ describe("web auth page QR state handling", () => {
   it("guards the waiting state until a real QR image is visible", () => {
     const html = getAuthPageHtml("test-token");
 
-    expect(html).toContain("currentStep === 'qr' && document.getElementById('qr-img').style.display !== 'none'");
+    expect(html).toContain(
+      "currentStep === 'qr' && document.getElementById('qr-img').style.display !== 'none'",
+    );
   });
 });
