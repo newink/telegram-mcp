@@ -10,6 +10,7 @@
     "start": "bun run src/index.ts",
     "dev:mock": "TELEGRAM_MOCK=true bun run src/index.ts",
     "test": "bun test --preload ./src/test-preload.ts",
+    "check": "bun run lint && bun run typecheck",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
