@@ -355,11 +355,15 @@ export function buildAuthUrl(context: RequestContext): string {
   return url.toString();
 }
 
+function buildStartupAuthUrl(port: number): string {
+  const base = getPublicBaseUrl() ?? new URL(`http://localhost:${port}`);
+  const url = new URL("/auth", base);
+  url.searchParams.set("token", ensureSetupToken());
+  return url.toString();
+}
+
 function logStartupAuthRequired(port: number, reason?: string): void {
-  const token = ensureSetupToken();
-  const authUrl = new URL("/auth", getPublicBaseUrl() ?? new URL(`http://localhost:${port}`));
-  authUrl.searchParams.set("token", token);
-  const authPath = authUrl.toString();
+  const authPath = buildStartupAuthUrl(port);
   log.warn({ authPath, reason }, "auth required — open the web auth page to connect Telegram");
 }
 
