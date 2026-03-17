@@ -268,13 +268,14 @@ export function attachAuthExpiryHandler(current: TelegramClient): void {
 export async function autoLogoutCurrentSession(
   current: TelegramClient,
   reason: string,
+  revokedSessionOverride: string | null = currentSession,
 ): Promise<void> {
   if (authCleanupPromise) {
     await authCleanupPromise;
     return;
   }
 
-  const revokedSession = currentSession;
+  const revokedSession = revokedSessionOverride;
   const revokedAt = new Date().toISOString();
 
   const cleanup = (async () => {
@@ -462,7 +463,7 @@ export async function getTelegramClient(): Promise<TelegramClient> {
 
     const reason = getAuthFailureReason(err);
     if (reason) {
-      await autoLogoutCurrentSession(current, reason);
+      await autoLogoutCurrentSession(current, reason, session);
       const revokedAfterCleanup = getRevokedSessionError();
       if (revokedAfterCleanup) {
         throw revokedAfterCleanup;
