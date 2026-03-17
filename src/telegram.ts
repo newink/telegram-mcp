@@ -123,20 +123,24 @@ function getRevokedSessionError(): TelegramSessionExpiredError | null {
   return new TelegramSessionExpiredError(revoked.reason, revoked.revokedAt);
 }
 
-async function clearRuntimeSessionArtifacts(): Promise<void> {
+async function clearRuntimeSessionArtifacts(revokedSession: string | null): Promise<void> {
   const envFile = process.env.ENV_FILE ?? ".env";
 
   if (existsSync(envFile)) {
     try {
       const env = loadEnv();
-      delete env.TELEGRAM_SESSION;
-      saveEnv(env);
+      if (env.TELEGRAM_SESSION === revokedSession) {
+        delete env.TELEGRAM_SESSION;
+        saveEnv(env);
+      }
     } catch (err) {
       log.warn({ err }, "failed to remove TELEGRAM_SESSION from .env");
     }
   }
 
-  delete process.env.TELEGRAM_SESSION;
+  if (process.env.TELEGRAM_SESSION === revokedSession) {
+    delete process.env.TELEGRAM_SESSION;
+  }
 
   try {
     await rm("bot-data/session", { force: true });
@@ -306,7 +310,7 @@ export async function autoLogoutCurrentSession(
       currentSession = null;
     }
 
-    await clearRuntimeSessionArtifacts();
+    await clearRuntimeSessionArtifacts(revokedSession);
   })().finally(() => {
     authCleanupPromise = null;
   });
@@ -432,7 +436,7 @@ export async function getTelegramClient(): Promise<TelegramClient> {
           currentSession = null;
         }
 
-        await clearRuntimeSessionArtifacts();
+        await clearRuntimeSessionArtifacts(session);
         throw new TelegramSessionExpiredError(INVALID_SESSION_REASON, revokedAt);
       }
 

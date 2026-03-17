@@ -282,6 +282,8 @@ describe("telegram auth revoke", () => {
   });
 
   it("treats invalid session import strings as auth-required and clears runtime session state", async () => {
+    // Keep TELEGRAM_MOCK unset so getTelegramClient reaches importSession();
+    // the injected factory keeps the test off the real Telegram network.
     process.env.TELEGRAM_API_ID = "123456";
     process.env.TELEGRAM_API_HASH = "test-api-hash";
     writeRuntimeArtifacts("invalid-session");
@@ -412,6 +414,37 @@ describe("telegram auth revoke", () => {
     expect(fake.calls.logOut).toBe(1);
     expect(fake.calls.destroy).toBe(1);
     expectRuntimeArtifactsRemoved();
+    expectAuthArtifactsRemain();
+  });
+
+  it("preserves a newly written session while removing revoked runtime artifacts", async () => {
+    const logoutGate = createDeferred<void>();
+    const fake = createFakeClient({
+      async logOut() {
+        await logoutGate.promise;
+      },
+    });
+
+    writeRuntimeArtifacts("revoked-session");
+    setCurrentSessionForTests("revoked-session");
+
+    const cleanup = autoLogoutCurrentSession(fake.client, "SESSION_REVOKED");
+
+    writeFileSync(process.env.ENV_FILE!, "TELEGRAM_SESSION=fresh-session\nKEEP=1\n");
+    process.env.TELEGRAM_SESSION = "fresh-session";
+    logoutGate.resolve(undefined);
+
+    await cleanup;
+
+    expect(fake.calls.logOut).toBe(1);
+    expect(fake.calls.destroy).toBe(1);
+    expect(process.env.TELEGRAM_SESSION).toBe("fresh-session");
+    expect(readFileSync(process.env.ENV_FILE!, "utf8")).toBe(
+      "TELEGRAM_SESSION=fresh-session\nKEEP=1\n",
+    );
+    expect(existsSync("bot-data/session")).toBe(false);
+    expect(existsSync("bot-data/session-wal")).toBe(false);
+    expect(existsSync("bot-data/session-shm")).toBe(false);
     expectAuthArtifactsRemain();
   });
 
