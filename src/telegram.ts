@@ -305,8 +305,8 @@ type MtcuteChatId = Parameters<TelegramClient["iterHistory"]>[0];
 type MtcuteSendChatId = Parameters<TelegramClient["sendText"]>[0];
 
 // mtcute expects numeric peer IDs as number, even for channel/supergroup IDs.
-export type TelegramChatId = string | number;
-export type TelegramSendChatId = string | number;
+type TelegramChatId = string | number;
+type TelegramSendChatId = string | number;
 export type TelegramSendMediaArgs = Parameters<TelegramClient["sendMedia"]>[1];
 
 export function toMtcuteChatId(chatId: TelegramChatId): MtcuteChatId {
