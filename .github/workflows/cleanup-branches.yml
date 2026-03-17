@@ -1,0 +1,38 @@
+name: Cleanup Merged Branches
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"  # Every Monday at 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Delete merged branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Delete merged branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Fetching merged branches..."
+          MERGED=$(gh api "repos/${REPO}/branches" --paginate \
+            --jq '.[].name' | grep -Ev '^main$')
+
+          for branch in $MERGED; do
+            # Check if branch was merged via a closed+merged PR
+            MERGED_PR=$(gh api "repos/${REPO}/pulls?state=closed&head=${REPO%%/*}:${branch}" \
+              --jq '[.[] | select(.merged_at != null)] | length')
+            if [ "$MERGED_PR" -gt 0 ]; then
+              echo "Deleting merged branch: $branch"
+              gh api "repos/${REPO}/git/refs/heads/${branch}" -X DELETE && \
+                echo "  ✓ deleted $branch" || \
+                echo "  ✗ failed to delete $branch"
+            fi
+          done
+
+          echo "Done."
