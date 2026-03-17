@@ -11,7 +11,12 @@ tools:
       # - "@username"  # Or @usernames
       # - "*"         # WARNING: wildcard — allows ALL chats, disables allowlist
 
-  # send_message:    # Uncomment when implemented
-  #   enabled: false
-  #   allowed_chats:
-  #     - "me"
+  send_message:
+    enabled: false
+    allowed_chats:
+      - "me"
+
+  send_file:
+    enabled: false
+    allowed_chats:
+      - "me"

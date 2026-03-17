@@ -301,6 +301,22 @@ export async function closeTelegramClient(): Promise<void> {
   }
 }
 
+type MtcuteChatId = Parameters<TelegramClient["iterHistory"]>[0];
+type MtcuteSendChatId = Parameters<TelegramClient["sendText"]>[0];
+
+// mtcute expects numeric peer IDs as number, even for channel/supergroup IDs.
+type TelegramChatId = string | number;
+type TelegramSendChatId = string | number;
+export type TelegramSendMediaArgs = Parameters<TelegramClient["sendMedia"]>[1];
+
+export function toMtcuteChatId(chatId: TelegramChatId): MtcuteChatId {
+  return chatId as MtcuteChatId;
+}
+
+export function toMtcuteSendChatId(chatId: TelegramSendChatId): MtcuteSendChatId {
+  return chatId as MtcuteSendChatId;
+}
+
 export async function getTelegramClient(): Promise<TelegramClient> {
   if (process.env.TELEGRAM_MOCK === "true") {
     if (!client) {

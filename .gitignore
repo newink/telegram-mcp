@@ -1,38 +1,35 @@
-# dependencies (bun install)
-node_modules
-
-# output
-out
-dist
-*.tgz
-
-# code coverage
-coverage
-*.lcov
-
-# logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
-
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
-
-# caches
-.eslintcache
-.cache
-*.tsbuildinfo
-
-# IntelliJ based IDEs
-.idea
 
 # Finder (MacOS) folder config
-.DS_Store
-
+# IntelliJ based IDEs
+# caches
+# code coverage
+# dependencies (bun install)
+# dev logs
+# dotenv environment variable files
+# logs
+# output
 # telegram session data & local config
-bot-data/
+
+*.lcov
+*.tgz
+*.tsbuildinfo
+.DS_Store
+.cache
+.env
+.env.development.local
+.env.local
+.env.production.local
+.env.test.local
+.eslintcache
+.idea
+*.log
+
+bot-data/*
 !bot-data/config.example.yml
+
+coverage
+dist
+logs
+mcp-server.log
+node_modules
+out

@@ -32,7 +32,11 @@ export function loadConfig(): Config {
   // Mock mode → permissive config for tests
   if (process.env.TELEGRAM_MOCK === "true") {
     const config = ConfigSchema.parse({
-      tools: { delete_messages: { enabled: true, allowed_chats: ["*"] } },
+      tools: {
+        delete_messages: { enabled: true, allowed_chats: ["*"] },
+        send_message: { enabled: true, allowed_chats: ["*"] },
+        send_file: { enabled: true, allowed_chats: ["*"] },
+      },
     });
     _config = config;
     return config;
@@ -107,7 +111,7 @@ function isToolEnabled(toolName: string): boolean {
  * - Tool enabled: true, allowed_chats has "*" → true (wildcard, for tests)
  * - Tool enabled: true, allowed_chats present → check membership
  */
-export function isChatAllowed(toolName: string, chatId: string | number): boolean {
+export function isChatAllowed(toolName: string, chatId: string | number | bigint): boolean {
   if (!isToolEnabled(toolName)) return false;
 
   const toolConfig = getConfig().tools[toolName];
@@ -121,7 +125,7 @@ export function isChatAllowed(toolName: string, chatId: string | number): boolea
   return toolConfig.allowed_chats.some((entry) => normalizeChatId(entry) === normalizedInput);
 }
 
-function normalizeChatId(id: string | number): string {
+function normalizeChatId(id: string | number | bigint): string {
   const s = String(id).trim().toLowerCase();
   return s.startsWith("@") ? s.slice(1) : s;
 }

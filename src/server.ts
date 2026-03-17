@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { BlockList, isIP } from "node:net";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -6,12 +7,15 @@ import { FileLocation, type Message } from "@mtcute/bun";
 import { z } from "zod";
 import { isChatAllowed, loadConfig } from "./config.ts";
 import { log } from "./logger.ts";
+import type { TelegramSendMediaArgs } from "./telegram.ts";
 import {
   closeTelegramClient,
   getTelegramClient,
   isSessionConfigured,
   isTelegramAuthRequiredError,
   TelegramSessionExpiredError,
+  toMtcuteChatId,
+  toMtcuteSendChatId,
   withTelegramClient,
 } from "./telegram.ts";
 import {
@@ -371,6 +375,17 @@ export function parseChatId(chatId: string): string | number {
   return /^-?\d+$/.test(chatId) ? Number(chatId) : chatId;
 }
 
+function sanitizeSendFileUploadError(err: unknown): Error {
+  if (typeof err === "object" && err !== null && "code" in err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EACCES" || code === "EPERM") {
+      return new Error("File upload failed: permission denied");
+    }
+  }
+
+  return new Error("File upload failed: internal error");
+}
+
 function registerTools(server: McpServer) {
   server.tool(
     "search_dialogs",
@@ -430,6 +445,7 @@ function registerTools(server: McpServer) {
     },
     async ({ chatId: rawChatId, limit, minDate, maxDate, onlyUnread, markAsRead }) => {
       const chatId = parseChatId(rawChatId);
+      const telegramChatId = toMtcuteChatId(chatId);
       const parsedMinDate = parseIsoDate(minDate, "minDate");
       const parsedMaxDate = parseIsoDate(maxDate, "maxDate");
 
@@ -444,7 +460,7 @@ function registerTools(server: McpServer) {
         if (parsedMinDate || parsedMaxDate) {
           mode = "date_search";
           for await (const msg of tg.iterSearchMessages({
-            chatId,
+            chatId: telegramChatId,
             minDate: parsedMinDate,
             maxDate: parsedMaxDate,
             limit,
@@ -453,25 +469,25 @@ function registerTools(server: McpServer) {
           }
         } else if (onlyUnread) {
           mode = "unread";
-          const [dialog] = await tg.getPeerDialogs([chatId]);
+          const [dialog] = await tg.getPeerDialogs([telegramChatId]);
           if (!dialog) {
             throw new Error(`Dialog not found for chatId: ${chatId}`);
           }
 
-          for await (const msg of tg.iterHistory(chatId, {
+          for await (const msg of tg.iterHistory(telegramChatId, {
             minId: dialog.lastReadIngoing,
             limit,
           })) {
             fetched.push(msg);
           }
         } else {
-          for await (const msg of tg.iterHistory(chatId, { limit })) {
+          for await (const msg of tg.iterHistory(telegramChatId, { limit })) {
             fetched.push(msg);
           }
         }
 
         if (markAsRead) {
-          await tg.readHistory(chatId);
+          await tg.readHistory(telegramChatId);
         }
 
         return jsonResponse({
@@ -503,6 +519,7 @@ function registerTools(server: McpServer) {
     },
     async ({ query, chatId: rawChatId, limit, minDate, maxDate }) => {
       const chatId = rawChatId ? parseChatId(rawChatId) : undefined;
+      const telegramChatId = chatId ? toMtcuteChatId(chatId) : undefined;
       const parsedMinDate = parseIsoDate(minDate, "minDate");
       const parsedMaxDate = parseIsoDate(maxDate, "maxDate");
 
@@ -513,7 +530,7 @@ function registerTools(server: McpServer) {
       return withTelegramClient(async (tg) => {
         const messages: ReturnType<typeof formatMessage>[] = [];
         for await (const msg of tg.iterSearchMessages({
-          chatId,
+          chatId: telegramChatId,
           query,
           minDate: parsedMinDate,
           maxDate: parsedMaxDate,
@@ -542,9 +559,10 @@ function registerTools(server: McpServer) {
     },
     async ({ chatId: rawChatId, messageId, filename }) => {
       const chatId = parseChatId(rawChatId);
+      const telegramChatId = toMtcuteChatId(chatId);
 
       return withTelegramClient(async (tg) => {
-        const [msg] = await tg.getMessages(chatId, [messageId]);
+        const [msg] = await tg.getMessages(telegramChatId, [messageId]);
 
         if (!msg) {
           throw new Error(`Message not found: ${chatId}/${messageId}`);
@@ -566,6 +584,92 @@ function registerTools(server: McpServer) {
           messageId,
           filename,
           mediaType: msg.media.type,
+          message: formatMessage(msg),
+        });
+      });
+    },
+  );
+
+  server.tool(
+    "send_message",
+    "Send a text message to a Telegram chat. Requires explicit opt-in in bot-data/config.yml.",
+    {
+      chatId: z
+        .string()
+        .describe('Numeric chat ID (as string), @username, or "me" for Saved Messages'),
+      text: z.string().min(1).describe("Message text"),
+      disableWebPreview: z
+        .boolean()
+        .default(true)
+        .describe("Disable link previews (default: true)"),
+    },
+    async ({ chatId: rawChatId, text, disableWebPreview }) => {
+      if (!isChatAllowed("send_message", rawChatId)) {
+        const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        log.warn(
+          { configPath, tool: "send_message", chatId: rawChatId },
+          "chat not in allowed_chats",
+        );
+        throw new Error(
+          `send_message is not allowed for chat "${rawChatId}". ` +
+            "Add it to allowed_chats in the config.",
+        );
+      }
+
+      const chatId = parseChatId(rawChatId);
+      return withTelegramClient(async (tg) => {
+        const msg = await tg.sendText(toMtcuteSendChatId(chatId), text, {
+          disableWebPreview,
+        });
+
+        return jsonResponse({
+          chatId,
+          message: formatMessage(msg),
+        });
+      });
+    },
+  );
+
+  server.tool(
+    "send_file",
+    "Send a local file to a Telegram chat as a document. Requires explicit opt-in in bot-data/config.yml.",
+    {
+      chatId: z
+        .string()
+        .describe('Numeric chat ID (as string), @username, or "me" for Saved Messages'),
+      filePath: z.string().min(1).describe("Local file path"),
+      caption: z.string().optional().describe("Optional caption"),
+    },
+    async ({ chatId: rawChatId, filePath, caption }) => {
+      if (!isChatAllowed("send_file", rawChatId)) {
+        const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        log.warn({ configPath, tool: "send_file", chatId: rawChatId }, "chat not in allowed_chats");
+        throw new Error(
+          `send_file is not allowed for chat "${rawChatId}". ` +
+            "Add it to allowed_chats in the config.",
+        );
+      }
+
+      if (!existsSync(filePath)) {
+        log.warn({ filePath }, "send_file: file not found");
+        throw new Error("send_file: specified file does not exist");
+      }
+
+      const chatId = parseChatId(rawChatId);
+      return withTelegramClient(async (tg) => {
+        let msg: Awaited<ReturnType<typeof tg.sendMedia>>;
+        try {
+          msg = await tg.sendMedia(toMtcuteSendChatId(chatId), {
+            type: "document",
+            file: filePath,
+            caption: caption ?? undefined,
+          } satisfies TelegramSendMediaArgs);
+        } catch (err) {
+          throw sanitizeSendFileUploadError(err);
+        }
+
+        return jsonResponse({
+          chatId,
           message: formatMessage(msg),
         });
       });
@@ -618,15 +722,19 @@ function registerTools(server: McpServer) {
     async ({ chatId: rawChatId, messageIds, revoke }) => {
       if (!isChatAllowed("delete_messages", rawChatId)) {
         const configPath = process.env.TELEGRAM_MCP_CONFIG ?? "bot-data/config.yml";
+        log.warn(
+          { configPath, tool: "delete_messages", chatId: rawChatId },
+          "chat not in allowed_chats",
+        );
         throw new Error(
           `delete_messages is not allowed for chat "${rawChatId}". ` +
-            `Add it to allowed_chats in ${configPath}.`,
+            "Add it to allowed_chats in the config.",
         );
       }
 
       const chatId = parseChatId(rawChatId);
       return withTelegramClient(async (tg) => {
-        await tg.deleteMessagesById(chatId, messageIds, { revoke });
+        await tg.deleteMessagesById(toMtcuteChatId(chatId), messageIds, { revoke });
 
         return jsonResponse({
           chatId,

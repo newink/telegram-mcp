@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildAuthUrl, createMcpServer } from "./server.ts";
@@ -147,6 +150,40 @@ describe("server auth required mapping", () => {
         }),
       });
     } finally {
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
+
+  it("sanitizes send_file upload errors before returning them to MCP clients", async () => {
+    process.env.TELEGRAM_MOCK = "true";
+
+    const { client, server } = await createConnectedClient(
+      new Request("http://localhost/mcp"),
+      null,
+    );
+    const tempDir = await mkdtemp(join(tmpdir(), "telegram-mcp-send-file-"));
+    const filePath = join(tempDir, "__mock_eacces__.txt");
+    await writeFile(filePath, "test");
+
+    try {
+      const result = await client.callTool({
+        name: "send_file",
+        arguments: {
+          chatId: "me",
+          filePath,
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        {
+          type: "text",
+          text: "File upload failed: permission denied",
+        },
+      ]);
+      expect(JSON.stringify(result)).not.toContain(filePath);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
       await Promise.all([client.close(), server.close()]);
     }
   });
