@@ -1,16 +1,18 @@
-FROM oven/bun:1-alpine AS deps
+ARG BUN_IMAGE=oven/bun:1.3.10-alpine
+
+FROM ${BUN_IMAGE} AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-FROM oven/bun:1-alpine AS build
+FROM ${BUN_IMAGE} AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY src/ src/
 COPY tsconfig.json .
 RUN bun build src/index.ts --outfile dist/index.js --target bun
 
-FROM oven/bun:1-alpine
+FROM ${BUN_IMAGE}
 WORKDIR /app
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=build /app/dist dist/
