@@ -24,7 +24,7 @@
     "@biomejs/biome": "^2.4.2",
     "@types/bun": "latest",
     "@types/qrcode-terminal": "^0.12.2",
-    "knip": "^5.84.1"
+    "knip": "^6.0.2"
   },
   "peerDependencies": {
     "typescript": "^5"
