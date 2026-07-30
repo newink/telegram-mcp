@@ -276,7 +276,7 @@ bun run typecheck    # TypeScript check
 bun run lint         # Biome lint + format
 bun run lint:fix     # Auto-fix lint issues
 bun run knip         # Find dead code
-bun run audit        # Full health check (types + lint + structure + TODOs)
+bun run audit        # Dead code, docs, env coverage, and TODO checks
 ```
 
 **Mock mode** — develop and test without a real Telegram account:

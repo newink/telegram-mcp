@@ -27,7 +27,7 @@ bun run knip        # no dead code
 bun run check:structure  # docs in sync with code
 ```
 
-Or run everything at once:
+Then run the repository-specific health checks:
 
 ```bash
 bun run audit
