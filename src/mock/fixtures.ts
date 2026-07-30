@@ -3,6 +3,8 @@ export interface MockMessage {
   date: Date;
   text: string;
   senderName: string;
+  senderId?: number;
+  senderUsername?: string;
   mediaType?: string;
 }
 
@@ -22,11 +24,13 @@ function msg(
   sender: string,
   text: string,
   mediaType?: string,
+  senderUsername?: string,
+  senderId?: number,
 ): MockMessage {
   const date = new Date();
   date.setDate(date.getDate() - daysAgo);
   date.setHours(10 + (id % 12), (id * 7) % 60);
-  return { id, date, text, senderName: sender, mediaType };
+  return { id, date, text, senderName: sender, senderId, senderUsername, mediaType };
 }
 
 export const MOCK_CHATS: MockChat[] = [
@@ -84,6 +88,7 @@ export const MOCK_CHATS: MockChat[] = [
   {
     id: -200001,
     name: "Project Alpha",
+    username: "project_alpha",
     type: "group",
     unreadCount: 5,
     lastReadIngoing: 4003,
@@ -95,7 +100,7 @@ export const MOCK_CHATS: MockChat[] = [
       msg(4005, 3, "Bob Smith", "Deployed v0.3.0 to staging"),
       msg(4006, 2, "Charlie Dev", "Found a regression in search"),
       msg(4007, 1, "Alice Johnson", "Hotfix merged, deploying now"),
-      msg(4008, 0, "Bob Smith", "All green on staging"),
+      msg(4008, 0, "Bob Smith", "All green on staging", undefined, "bobsmith", 100002),
     ],
   },
   {

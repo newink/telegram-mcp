@@ -23,8 +23,17 @@ function toMockMessageObj(msg: MockMessage, chat: MockChat) {
     id: msg.id,
     date: msg.date,
     text: msg.text || "",
-    sender: { displayName: msg.senderName },
-    chat: { displayName: chat.name },
+    sender: {
+      id: msg.senderId ?? null,
+      displayName: msg.senderName,
+      username: msg.senderUsername ?? null,
+    },
+    chat: {
+      id: chat.id,
+      displayName: chat.name,
+      username: chat.username ?? null,
+      type: chat.type,
+    },
     media: msg.mediaType ? { type: msg.mediaType, [Symbol.toStringTag]: "FileLocation" } : null,
   };
 }

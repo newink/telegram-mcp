@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { buildAuthUrl, createMcpServer } from "./server.ts";
+import { SERVER_IDLE_TIMEOUT_SECONDS, buildAuthUrl, createMcpServer } from "./server.ts";
 import { resetTelegramState, setAuthRevokedStateForTests } from "./telegram.ts";
 import { resetSetupTokenForTests } from "./web-auth.ts";
 
@@ -32,6 +32,18 @@ async function createConnectedClient(
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
   return { client, server };
+}
+
+function parseToolPayload(result: unknown): {
+  messages: Array<Record<string, unknown>>;
+} {
+  const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
+  const firstContent = content?.[0];
+  if (firstContent?.type !== "text" || typeof firstContent.text !== "string") {
+    throw new Error("Expected an MCP text content result");
+  }
+
+  return JSON.parse(firstContent.text);
 }
 
 describe("server auth required mapping", () => {
@@ -184,6 +196,87 @@ describe("server auth required mapping", () => {
       expect(JSON.stringify(result)).not.toContain(filePath);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
+});
+
+describe("server runtime configuration", () => {
+  it("keeps long-lived auth status streams open", () => {
+    expect(SERVER_IDLE_TIMEOUT_SECONDS).toBe(0);
+  });
+});
+
+describe("message formatting", () => {
+  let originalEnv: Partial<Record<EnvKey, string | undefined>>;
+
+  beforeEach(() => {
+    originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+    resetTelegramState();
+    process.env.TELEGRAM_MOCK = "true";
+  });
+
+  afterEach(() => {
+    resetTelegramState();
+
+    for (const key of ENV_KEYS) {
+      const value = originalEnv[key];
+      if (typeof value === "string") {
+        process.env[key] = value;
+      } else {
+        delete process.env[key];
+      }
+    }
+  });
+
+  it("Given a public group, returns stable participant identity and a source URL", async () => {
+    const { client, server } = await createConnectedClient(
+      new Request("http://localhost/mcp"),
+      null,
+    );
+
+    try {
+      const result = await client.callTool({
+        name: "get_messages",
+        arguments: { chatId: "@project_alpha", limit: 1 },
+      });
+
+      const payload = parseToolPayload(result);
+      expect(payload.messages[0]).toEqual({
+        id: 4008,
+        date: expect.any(String),
+        chatId: "-200001",
+        chat: "Project Alpha",
+        chatUsername: "project_alpha",
+        senderId: "100002",
+        sender: "Bob Smith",
+        senderUsername: "bobsmith",
+        senderHandle: "@bobsmith",
+        text: "All green on staging",
+        mediaType: null,
+        sourceUrl: "https://t.me/project_alpha/4008",
+      });
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
+
+  it("Given a private group, returns no fabricated source URL", async () => {
+    const { client, server } = await createConnectedClient(
+      new Request("http://localhost/mcp"),
+      null,
+    );
+
+    try {
+      const result = await client.callTool({
+        name: "get_messages",
+        arguments: { chatId: "-200002", limit: 1 },
+      });
+
+      const payload = parseToolPayload(result);
+      expect(payload.messages[0]?.chatUsername).toBeNull();
+      expect(payload.messages[0]?.sourceUrl).toBeNull();
+    } finally {
       await Promise.all([client.close(), server.close()]);
     }
   });
