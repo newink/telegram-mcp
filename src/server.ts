@@ -481,8 +481,7 @@ function registerTools(server: McpServer) {
             fetched.push(msg);
           }
           fetched.sort(
-            (left, right) =>
-              left.date.getTime() - right.date.getTime() || left.id - right.id,
+            (left, right) => left.date.getTime() - right.date.getTime() || left.id - right.id,
           );
         } else if (onlyUnread) {
           mode = "unread";

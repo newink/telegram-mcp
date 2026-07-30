@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { SERVER_IDLE_TIMEOUT_SECONDS, buildAuthUrl, createMcpServer } from "./server.ts";
+import { buildAuthUrl, createMcpServer, SERVER_IDLE_TIMEOUT_SECONDS } from "./server.ts";
 import { resetTelegramState, setAuthRevokedStateForTests } from "./telegram.ts";
 import { resetSetupTokenForTests } from "./web-auth.ts";
 
