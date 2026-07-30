@@ -1,0 +1,4 @@
+interface:
+  display_name: "Telegram Summary"
+  short_description: "Summarize Telegram discussions with sources"
+  default_prompt: "Use $telegram-summary to summarize a Telegram group over a specified time range with participant attribution."
