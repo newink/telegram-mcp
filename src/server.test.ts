@@ -36,6 +36,7 @@ async function createConnectedClient(
 
 function parseToolPayload(result: unknown): {
   messages: Array<Record<string, unknown>>;
+  limitReached?: boolean;
 } {
   const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
   const firstContent = content?.[0];
@@ -276,6 +277,77 @@ describe("message formatting", () => {
       const payload = parseToolPayload(result);
       expect(payload.messages[0]?.chatUsername).toBeNull();
       expect(payload.messages[0]?.sourceUrl).toBeNull();
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
+
+  it("Given a date range, returns messages from oldest to newest", async () => {
+    const { client, server } = await createConnectedClient(
+      new Request("http://localhost/mcp"),
+      null,
+    );
+
+    try {
+      const result = await client.callTool({
+        name: "get_messages",
+        arguments: {
+          chatId: "@project_alpha",
+          limit: 3,
+          minDate: "2000-01-01T00:00:00.000Z",
+          maxDate: "2100-01-01T00:00:00.000Z",
+          onlyUnread: false,
+          markAsRead: false,
+        },
+      });
+
+      const payload = parseToolPayload(result);
+      expect(payload.messages.map((message) => message.id)).toEqual([4006, 4007, 4008]);
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
+
+  it("Given more than 500 requested messages, rejects the request", async () => {
+    const { client, server } = await createConnectedClient(
+      new Request("http://localhost/mcp"),
+      null,
+    );
+
+    try {
+      await expect(
+        client.callTool({
+          name: "get_messages",
+          arguments: { chatId: "@project_alpha", limit: 501 },
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
+
+  it("Reports when the requested message limit was reached", async () => {
+    const { client, server } = await createConnectedClient(
+      new Request("http://localhost/mcp"),
+      null,
+    );
+
+    try {
+      const saturated = parseToolPayload(
+        await client.callTool({
+          name: "get_messages",
+          arguments: { chatId: "@project_alpha", limit: 1 },
+        }),
+      );
+      const unsaturated = parseToolPayload(
+        await client.callTool({
+          name: "get_messages",
+          arguments: { chatId: "@project_alpha", limit: 500 },
+        }),
+      );
+
+      expect(saturated.limitReached).toBe(true);
+      expect(unsaturated.limitReached).toBe(false);
     } finally {
       await Promise.all([client.close(), server.close()]);
     }

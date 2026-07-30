@@ -450,7 +450,7 @@ function registerTools(server: McpServer) {
     "Get messages from a Telegram chat. Supports date range filtering, unread-only mode, and marking messages as read. Use a numeric chat ID or @username as chatId.",
     {
       chatId: z.string().describe("Numeric chat ID (as string) or @username"),
-      limit: z.number().int().positive().default(20).describe("Max messages"),
+      limit: z.number().int().positive().max(500).default(20).describe("Max messages"),
       minDate: z.string().optional().describe("Only messages after this ISO date"),
       maxDate: z.string().optional().describe("Only messages before this ISO date"),
       onlyUnread: z.boolean().default(false).describe("Only fetch unread messages"),
@@ -480,6 +480,10 @@ function registerTools(server: McpServer) {
           })) {
             fetched.push(msg);
           }
+          fetched.sort(
+            (left, right) =>
+              left.date.getTime() - right.date.getTime() || left.id - right.id,
+          );
         } else if (onlyUnread) {
           mode = "unread";
           const [dialog] = await tg.getPeerDialogs([telegramChatId]);
@@ -514,6 +518,7 @@ function registerTools(server: McpServer) {
             markAsRead,
           },
           count: fetched.length,
+          limitReached: fetched.length === limit,
           messages: fetched.map(formatMessage),
         });
       });
