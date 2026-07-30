@@ -10,11 +10,13 @@ WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY src/ src/
 COPY tsconfig.json .
-RUN bun build src/index.ts --outfile dist/index.js --target bun
+RUN bun build src/index.ts --outfile dist/index.js --target bun --packages external
 
 FROM ${BUN_IMAGE}
 WORKDIR /app
 RUN addgroup -S app && adduser -S app -G app
+COPY package.json ./
+COPY --from=deps /app/node_modules node_modules
 COPY --from=build /app/dist dist/
 RUN mkdir -p bot-data && chown -R app:app /app
 USER app

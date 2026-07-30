@@ -22,3 +22,11 @@ export function saveEnv(entries: Record<string, string>) {
   const lines = Object.entries(entries).map(([k, v]) => `${k}=${v}`);
   writeFileSync(envPath(), `${lines.join("\n")}\n`);
 }
+
+export function applyEnvFileToProcess() {
+  for (const [key, value] of Object.entries(loadEnv())) {
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
