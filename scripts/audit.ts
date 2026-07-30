@@ -17,6 +17,10 @@ function issue(msg: string) {
   console.log(`  ⚠ ${msg}`);
 }
 
+function warning(msg: string) {
+  console.log(`  ⚠ ${msg}`);
+}
+
 // ── 1. Dead code (knip) ────────────────────────────────────────────
 header("Dead code (knip)");
 
@@ -117,7 +121,7 @@ if (undocumented.length > 0) {
   console.log("  OK: all env vars documented");
 }
 
-// ── 5. Stale docs ──────────────────────────────────────────────────
+// ── 5. Stale docs (advisory: checkout mtimes are not deterministic) ─
 header("Stale docs");
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -141,7 +145,7 @@ for await (const path of docsGlob.scan({ cwd: ".", absolute: false })) {
   const ageMs = now - stat.mtimeMs;
   if (ageMs > THIRTY_DAYS_MS && latestTsMtime - stat.mtimeMs > THIRTY_DAYS_MS) {
     const days = Math.floor(ageMs / (24 * 60 * 60 * 1000));
-    issue(`${path} — last modified ${days} days ago`);
+    warning(`${path} — last modified ${days} days ago`);
     staleCount++;
   }
 }
