@@ -1,59 +1,94 @@
 # Architecture
 
-## Overview
+## System boundary
 
-telegram-mcp is an MCP (Model Context Protocol) server that exposes Telegram functionality as tools via Streamable HTTP transport.
+`telegram-mcp` exposes atomic Telegram operations. Codex, Claude, or another
+MCP client owns the reasoning loop and produces the final summary.
 
+```text
+User request
+    |
+Codex / Claude + telegram-summary skill
+    |
+Streamable HTTP MCP endpoint (/mcp)
+    |
+MCP tools (src/server.ts)
+    |
+TelegramClient singleton (src/telegram.ts)
+    |
+Telegram MTProto
 ```
-Client (Claude/OpenClaw/mcporter)
-  ↕ HTTP POST/GET/DELETE on /mcp
-MCP Server (server.ts)
-  ↕ Tool calls
-TelegramClient singleton (telegram.ts)
-  ↕ MTProto
-Telegram servers
-```
+
+The server does not embed an LLM, schedule background summaries, or combine
+reading and writing into one tool.
+
+## Summary orchestration
+
+The portable `.agents/skills/telegram-summary/SKILL.md` directs the MCP client
+to:
+
+1. normalize the requested time range;
+2. resolve each source;
+3. read bounded message windows;
+4. split saturated windows and verify coverage;
+5. deduplicate and sort messages;
+6. summarize topics and participant contributions;
+7. cite sources and state limitations.
+
+Multiple sources are retrieved independently so coverage remains auditable.
+The agent may combine shared topics only after retrieval.
 
 ## Components
 
 ### `src/index.ts`
-Entry point. Calls `startServer()`.
+
+Loads the configured environment file and starts the server.
 
 ### `src/server.ts`
-- Creates `McpServer` instances (one per session)
-- Registers all MCP tools via `registerTools()`
-- Manages HTTP transport with `WebStandardStreamableHTTPServerTransport`
-- Session lifecycle: initialize → route by `Mcp-Session-Id` header → cleanup on close
-- Helper functions: `jsonResponse()` (bigint-safe), `formatMessage()`, `parseChatId()`
+
+- creates an MCP server for each stateless HTTP request;
+- registers all Telegram tools;
+- validates input with Zod;
+- formats bigint-safe JSON;
+- exposes browser authentication routes;
+- converts messages into stable identity and source metadata.
 
 ### `src/telegram.ts`
-- Singleton `TelegramClient` from `@mtcute/bun`
-- `getTelegramClient()` — lazy init, connects on first call
-- When `TELEGRAM_MOCK=true`, returns mock client instead (see [testing.md](testing.md))
-- Auth via session string (`TELEGRAM_SESSION` env var)
 
-### `src/auth.ts`
-- Interactive QR-code authentication flow
-- Generates session string for `TELEGRAM_SESSION`
-- Run via `bun auth`
+- owns the single real `TelegramClient`;
+- connects lazily and supports keepalive checks;
+- returns the mock client when `TELEGRAM_MOCK=true`;
+- surfaces terminal authentication failures for re-authentication.
+
+### `src/web-auth.ts` and `src/auth.ts`
+
+Provide browser and terminal Telegram authentication. Both persist the session
+to the configured environment file.
+
+### `src/config.ts`
+
+Loads the write-tool allowlist from `bot-data/config.yml` or
+`TELEGRAM_MCP_CONFIG`. Missing configuration leaves every write tool disabled.
 
 ### `src/mock/`
-- `client.ts` — Mock implementation of TelegramClient interface
-- `fixtures.ts` — In-memory test data (chats, messages, media)
-- Used when `TELEGRAM_MOCK=true`
 
-## Session Management
+Contains deterministic dialogs, messages, senders, and media used by all
+automated tests. Tests never connect to Telegram.
 
-Each MCP client gets its own session (UUID). Sessions are stored in a `Map<string, {server, transport}>`. All sessions share the same TelegramClient singleton.
+## Read and write boundaries
 
-Request routing:
-1. POST without session ID + `initialize` method → create new session
-2. Any request with valid session ID → route to session's transport
-3. Unknown session ID → 404
-4. DELETE → close session
+Read tools are available to MCP clients. `send_message`, `send_file`, and
+`delete_messages` are separate capabilities guarded by explicit per-tool chat
+allowlists. The summary skill never invokes them.
 
-## Security Considerations
+## Failure behavior
 
-- The `/mcp` endpoint has no authentication (runs on private network / tailscale)
-- All current tools are read-only
-- Future write tools (send/forward) should use a chat whitelist
+MTProto may return `FLOOD_WAIT`, revoked sessions, or inaccessible history.
+The server surfaces failures; the orchestration layer reports the covered and
+missing intervals rather than automatically retrying or claiming completeness.
+
+## Network security
+
+The MCP endpoint has no built-in application authentication. Bind it to a
+trusted network, localhost, VPN, or authenticated reverse proxy. Forwarded
+authentication URLs are accepted only from configured trusted proxies.

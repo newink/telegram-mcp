@@ -4,7 +4,7 @@
 
 # telegram-mcp
 
-**Give AI agents access to your Telegram — via MTProto, not Bot API.**
+**Turn Telegram group history into source-linked summaries with Codex or Claude.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.x-fbf0df?logo=bun&logoColor=black)](https://bun.sh)
@@ -19,33 +19,38 @@
 
 ## What is this?
 
-**telegram-mcp** is an [MCP server](https://modelcontextprotocol.io) that exposes your Telegram account as tools for AI agents. It uses **MTProto** (userbot protocol) — not Bot API — which means it can access any chat, channel, or DM your account has access to, without needing to add a bot.
+**telegram-mcp** is an [MCP server](https://modelcontextprotocol.io) and a
+portable agent skill for summarizing Telegram discussions over exact time
+ranges. It uses **MTProto** rather than Bot API, so it can read groups and
+channels already available to your Telegram account without adding a bot.
 
-Connect it to Claude, Codex, or any MCP-compatible client and let agents read messages, search dialogs, download media, and fetch message links — all from your personal Telegram.
+Connect it to Codex, Claude, or another MCP client. The client resolves the
+requested source, reads complete bounded windows, removes overlap, and returns
+topic and participant summaries with traceable source links.
 
 ---
 
-## Use Cases
+## Summary-first use cases
 
-**📰 Channel digest**
-Ask your agent to pull the last 50 unread messages from your favorite tech channels, filter for substance, and summarize what's worth reading.
+**One group**
 
-```
-"Fetch unread messages from @some_channel since yesterday and summarize the key points"
-```
-
-**🔍 Search your history**
-Find that message with the link someone sent you three weeks ago in a group of 500 people.
-
-```
-"Search my dialogs for 'MCP server' and find where I discussed it"
+```text
+Summarize @project_alpha from 30 July 2026 10:00 to 12:00 Europe/Moscow.
+Include participant contributions, decisions, risks, resources, and sources.
 ```
 
-**🤖 Agent inbox monitoring**
-Wire your AI agent to periodically check specific channels and pipe interesting content into your workflow — notes, capture files, summaries.
+**Several groups**
 
-**📎 Media extraction**
-Download files, images, or documents from any message your agent finds — useful for automating research pipelines.
+```text
+Summarize Project Alpha and Build Room from Monday 09:00 until now.
+Keep coverage and sources separate for each group, then show shared topics.
+```
+
+**Search and research**
+
+- Find a historical message or exact resource link.
+- Compare how several communities discussed the same topic.
+- Download and inspect referenced media when the user asks for it.
 
 ---
 
@@ -158,7 +163,53 @@ Supported platforms: `linux/amd64`, `linux/arm64` (Raspberry Pi, Apple Silicon v
 
 ---
 
+## How the summary agent works
+
+1. Normalize the inclusive start, end, and timezone.
+2. Resolve each group or channel without guessing ambiguous names.
+3. Read up to 500 messages per bounded request without marking them as read.
+4. Split saturated intervals into smaller overlapping windows.
+5. Verify coverage and stop safely on Telegram access errors.
+6. Deduplicate overlaps and sort messages chronologically.
+7. Cluster substantive topics and attribute each claim to participants.
+8. Cite public Telegram messages and preserve external URLs exactly.
+9. Separate facts from conclusions and disclose partial reads or uninspected
+   attachments.
+
+The packaged skill is
+[`.agents/skills/telegram-summary/SKILL.md`](.agents/skills/telegram-summary/SKILL.md).
+It is read-only: summary requests never invoke Telegram write tools.
+
+Representative result:
+
+```text
+### Runtime upgrade
+- Anna (@anna) proposed the upgrade after mock CI.
+- Boris (@boris) identified a container compatibility risk and requested a smoke test.
+- Decision: run both checks before reconsidering the upgrade.
+- Sources: https://t.me/project_alpha/5101, https://t.me/project_alpha/5102
+```
+
+Private groups receive message IDs instead of fabricated public links. Media
+contents are excluded unless the attachment was explicitly downloaded and
+inspected.
+
+---
+
 ## Connect to Your AI Client
+
+### Codex
+
+This repository includes `.codex/config.toml`:
+
+```toml
+[mcp_servers.telegram]
+url = "http://localhost:3000/mcp"
+```
+
+Start the MCP server, open the repository in Codex, and ask for a
+date-and-source summary. The packaged skill provides the orchestration
+contract.
 
 ### Claude Desktop
 
@@ -209,6 +260,8 @@ curl -X POST http://localhost:3000/mcp \
 | `PORT` | No | Server port (default: `3000`) |
 | `LOG_LEVEL` | No | Pino log level: `trace\|debug\|info\|warn\|error` (default: `info`) |
 | `TELEGRAM_MOCK` | No | Set `true` to use mock data (no real Telegram needed) |
+| `TELEGRAM_MCP_CONFIG` | No | Write-tool allowlist path (default: `bot-data/config.yml`) |
+| `KEEPALIVE_INTERVAL_MS` | No | Session keepalive interval (default: 6 hours) |
 
 *Not required when `TELEGRAM_MOCK=true`.
 
@@ -223,7 +276,7 @@ bun run typecheck    # TypeScript check
 bun run lint         # Biome lint + format
 bun run lint:fix     # Auto-fix lint issues
 bun run knip         # Find dead code
-bun run audit        # Full health check (types + lint + structure + TODOs)
+bun run audit        # Dead code, docs, env coverage, and TODO checks
 ```
 
 **Mock mode** — develop and test without a real Telegram account:
@@ -238,6 +291,7 @@ Mock data includes sample dialogs, messages, and media — enough to build and t
 Project structure and architecture → [docs/architecture.md](docs/architecture.md)
 MTProto specifics and gotchas → [docs/mtproto.md](docs/mtproto.md)
 Adding new tools → [docs/tools.md](docs/tools.md)
+Testing and BDD scenarios → [docs/testing.md](docs/testing.md)
 
 ---
 

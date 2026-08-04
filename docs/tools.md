@@ -1,115 +1,117 @@
 # MCP Tools Reference
 
-### Configuration
+Write tools require explicit opt-in in `bot-data/config.yml`. With no config,
+all write tools are disabled.
 
-Write tools (e.g. `delete_messages`) require explicit opt-in via `bot-data/config.yml`.
-See `bot-data/config.example.yml` for the full schema.
+Every message object uses:
 
-If no config file is present, all write tools are disabled.
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | number | Message ID inside the chat |
+| `date` | ISO string | Telegram message timestamp |
+| `chatId` | string | Stable chat identity |
+| `chat` | string or null | Chat display name |
+| `chatUsername` | string or null | Public source username |
+| `senderId` | string or null | Stable sender identity |
+| `sender` | string | Sender display name |
+| `senderUsername` | string or null | Sender username without `@` |
+| `senderHandle` | string or null | Sender username with `@` |
+| `text` | string | Text or caption, otherwise `[no text]` |
+| `mediaType` | string or null | Telegram media type |
+| `sourceUrl` | string or null | Canonical public message URL |
 
----
+`sourceUrl` is null for private groups, direct messages, and sources without a
+public username.
 
 ## search_dialogs
 
-Search Telegram dialogs by display name or username.
+Search dialogs by display name or username.
 
-**Parameters:**
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| query | string | yes | — | Search query (min 1 char) |
-| limit | number | no | 10 | Max results |
+| Parameter | Type | Required | Default |
+|---|---|---|---|
+| `query` | string | yes | — |
+| `limit` | positive integer | no | `10` |
 
-**Returns:** `{ query, count, dialogs: [{ type, id, name, username, unreadCount }] }`
-
-**Example:**
-```bash
-curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_dialogs","arguments":{"query":"john"}}}'
-```
+Returns `{ query, count, dialogs }`; each dialog has `type`, `id`, `name`,
+`username`, and `unreadCount`.
 
 ## get_messages
 
-Get messages from a chat with optional filtering.
+Fetch messages from one chat with optional date or unread filters.
 
-**Parameters:**
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| chatId | string | yes | — | Numeric ID or @username |
-| limit | number | no | 20 | Max messages |
-| minDate | string | no | — | ISO date, messages after |
-| maxDate | string | no | — | ISO date, messages before |
-| onlyUnread | boolean | no | false | Only unread messages |
-| markAsRead | boolean | no | false | Mark as read after fetch |
+| Parameter | Type | Required | Default |
+|---|---|---|---|
+| `chatId` | string | yes | — |
+| `limit` | integer `1..500` | no | `20` |
+| `minDate` | ISO string | no | — |
+| `maxDate` | ISO string | no | — |
+| `onlyUnread` | boolean | no | `false` |
+| `markAsRead` | boolean | no | `false` |
 
-**Modes:**
-- Default: `iterHistory()` — latest messages
-- Date filter: `iterSearchMessages()` — when minDate/maxDate set
-- Unread: `iterHistory(minId: lastReadIngoing)` — when onlyUnread=true
+With a date filter, messages are returned oldest to newest and tied timestamps
+are ordered by message ID.
 
-**Returns:** `{ chatId, mode, limit, filters, count, messages: [{ id, date, sender, chat, text, mediaType }] }`
+Returns:
+
+```json
+{
+  "chatId": "@project_alpha",
+  "mode": "date_search",
+  "limit": 500,
+  "filters": {
+    "minDate": "2026-07-30T07:00:00.000Z",
+    "maxDate": "2026-07-30T09:00:00.000Z",
+    "onlyUnread": false,
+    "markAsRead": false
+  },
+  "count": 3,
+  "limitReached": false,
+  "messages": []
+}
+```
+
+`limitReached` is true when `count` equals the requested limit. It signals
+possible truncation, so a summary agent must split the interval before
+claiming complete coverage.
 
 ## search_messages
 
-Search messages by text query. Searches globally or within a specific chat.
+Full-text search globally or within one chat.
 
-**Parameters:**
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| query | string | yes | — | Search text (min 1 char) |
-| chatId | string | no | — | Scope to specific chat (numeric ID or @username) |
-| limit | number | no | 20 | Max messages |
-| minDate | string | no | — | ISO date, messages after |
-| maxDate | string | no | — | ISO date, messages before |
+| Parameter | Type | Required | Default |
+|---|---|---|---|
+| `query` | string | yes | — |
+| `chatId` | string | no | all chats |
+| `limit` | positive integer | no | `20` |
+| `minDate` | ISO string | no | — |
+| `maxDate` | ISO string | no | — |
 
-**Returns:** `{ query, chatId, count, messages: [{ id, date, sender, chat, text, mediaType }] }`
-
-**Example:**
-```bash
-curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_messages","arguments":{"query":"meeting","chatId":"100001"}}}'
-```
+Use this for explicit keyword searches, not complete range retrieval.
 
 ## media_download
 
-Download media from a message to a local file.
+Download media from a message.
 
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| chatId | string | yes | Numeric ID or @username |
-| messageId | number | yes | Message ID with media |
-| filename | string | yes | Local path to save file |
+| Parameter | Type | Required |
+|---|---|---|
+| `chatId` | string | yes |
+| `messageId` | positive integer | yes |
+| `filename` | string | yes |
 
-**Returns:** `{ status, chatId, messageId, filename, mediaType, message }`
-
-**Errors:** Throws if message not found, no media, or media type not downloadable.
+Returns the saved filename, media type, and formatted source message.
 
 ## message_from_link
 
-Fetch a message by its Telegram link.
+Fetch a message from a public or private `t.me` message link.
 
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| link | string | yes | t.me link (e.g. `https://t.me/channel/123`) |
+| Parameter | Type | Required |
+|---|---|---|
+| `link` | string | yes |
 
-**Returns:** `{ link, found, message? }`
+Returns `{ link, found, message? }`.
 
-## send_message
-
-Send a text message to a Telegram chat. Write tool — requires config opt-in.
-
-**Parameters:**
-
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| chatId | string | yes | — | Numeric ID, @username, or `"me"` |
-| text | string | yes | — | Message text |
-| disableWebPreview | boolean | no | true | Disable link previews |
-
-**Returns:** `{ chatId, message }`
-
-**Config required:**
+The remaining tools write to Telegram. `send_message`, `send_file`, and
+`delete_messages` each require:
 
 ```yaml
 tools:
@@ -119,50 +121,18 @@ tools:
       - "me"
 ```
 
+Each tool checks its own named block and the requested chat on every call.
+These tools are outside the read-only summary workflow.
+
+## send_message
+
+Parameters: `chatId`, `text`, optional `disableWebPreview` (default `true`).
+
 ## send_file
 
-Send a local file to a Telegram chat as a document. Write tool — requires config opt-in.
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| chatId | string | yes | Numeric ID, @username, or `"me"` |
-| filePath | string | yes | Local file path |
-| caption | string | no | Optional caption |
-
-**Returns:** `{ chatId, message }`
-
-**Config required:**
-
-```yaml
-tools:
-  send_file:
-    enabled: true
-    allowed_chats:
-      - "me"
-```
+Parameters: `chatId`, `filePath`, optional `caption`.
 
 ## delete_messages
 
-Delete one or more messages from a chat. Write tool — requires config opt-in.
-
-**Parameters:**
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| chatId | string | yes | — | Numeric ID, @username, or "me" |
-| messageIds | number[] | yes | — | IDs to delete (min 1, supports bulk) |
-| revoke | boolean | no | true | Delete for everyone (true) or self only (false) |
-
-**Returns:** `{ chatId, deletedCount, messageIds, revoke }`
-
-**Config required:**
-```yaml
-tools:
-  delete_messages:
-    enabled: true
-    allowed_chats:
-      - "me"
-```
-
-Throws if chat not in `allowed_chats`. No error if message IDs don't exist (Telegram ignores them).
+Parameters: `chatId`, non-empty `messageIds`, optional `revoke` (default
+`true`).

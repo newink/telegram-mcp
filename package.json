@@ -21,13 +21,23 @@
     "docker:run": "docker compose up"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.2",
+    "@biomejs/biome": "^2.5.6",
     "@types/bun": "latest",
     "@types/qrcode-terminal": "^0.12.2",
-    "knip": "^6.0.2"
+    "knip": "^6.29.0"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.12",
+    "body-parser": "2.3.0",
+    "express-rate-limit": "8.6.1",
+    "fast-uri": "4.1.1",
+    "hono": "4.12.32",
+    "ip-address": "10.3.1",
+    "path-to-regexp": "8.4.2",
+    "qs": "6.15.3"
   },
   "knip": {
     "entry": [
@@ -41,12 +51,12 @@
     ]
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.26.0",
-    "@mtcute/bun": "^0.28.0",
-    "@mtcute/dispatcher": "^0.28.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@mtcute/bun": "^0.28.2",
+    "@mtcute/dispatcher": "^0.28.2",
     "pino": "^10.3.1",
     "qrcode-terminal": "^0.12.0",
-    "yaml": "^2.8.2",
-    "zod": "^4.3.6"
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   }
 }

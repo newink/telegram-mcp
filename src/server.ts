@@ -30,6 +30,7 @@ import {
 const AUTH_REQUIRED_ERROR_CODE = -32001;
 const AUTH_REQUIRED_MESSAGE =
   "Telegram session expired or was revoked. Re-authentication is required.";
+export const SERVER_IDLE_TIMEOUT_SECONDS = 0;
 
 type RequestContext = {
   request: Request;
@@ -147,13 +148,25 @@ function normalizeDialogType(peer: {
 }
 
 function formatMessage(msg: Message) {
+  const senderId = msg.sender?.id == null ? null : String(msg.sender.id);
+  const senderUsername = msg.sender?.username ?? null;
+  const chatId = String(msg.chat.id);
+  const chatUsername = msg.chat.username ?? null;
+  const hasPublicMessageUrl = chatUsername !== null && msg.chat.type !== "user";
+
   return {
     id: msg.id,
     date: msg.date.toISOString(),
+    chatId,
+    chat: msg.chat.displayName ?? null,
+    chatUsername,
+    senderId,
     sender: msg.sender?.displayName ?? "Unknown",
-    chat: msg.chat?.displayName ?? null,
+    senderUsername,
+    senderHandle: senderUsername ? `@${senderUsername}` : null,
     text: msg.text || "[no text]",
     mediaType: msg.media?.type ?? null,
+    sourceUrl: hasPublicMessageUrl ? `https://t.me/${chatUsername}/${msg.id}` : null,
   };
 }
 
@@ -437,7 +450,7 @@ function registerTools(server: McpServer) {
     "Get messages from a Telegram chat. Supports date range filtering, unread-only mode, and marking messages as read. Use a numeric chat ID or @username as chatId.",
     {
       chatId: z.string().describe("Numeric chat ID (as string) or @username"),
-      limit: z.number().int().positive().default(20).describe("Max messages"),
+      limit: z.number().int().positive().max(500).default(20).describe("Max messages"),
       minDate: z.string().optional().describe("Only messages after this ISO date"),
       maxDate: z.string().optional().describe("Only messages before this ISO date"),
       onlyUnread: z.boolean().default(false).describe("Only fetch unread messages"),
@@ -467,6 +480,9 @@ function registerTools(server: McpServer) {
           })) {
             fetched.push(msg);
           }
+          fetched.sort(
+            (left, right) => left.date.getTime() - right.date.getTime() || left.id - right.id,
+          );
         } else if (onlyUnread) {
           mode = "unread";
           const [dialog] = await tg.getPeerDialogs([telegramChatId]);
@@ -501,6 +517,7 @@ function registerTools(server: McpServer) {
             markAsRead,
           },
           count: fetched.length,
+          limitReached: fetched.length === limit,
           messages: fetched.map(formatMessage),
         });
       });
@@ -759,6 +776,7 @@ export async function startServer() {
 
   Bun.serve({
     port,
+    idleTimeout: SERVER_IDLE_TIMEOUT_SECONDS,
     async fetch(req, server) {
       const url = new URL(req.url);
 

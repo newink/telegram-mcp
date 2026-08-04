@@ -304,6 +304,12 @@ async function completeAuth(client: TelegramClient, user: User): Promise<void> {
   const session = await client.exportSession();
 
   const env = loadEnv();
+  if (process.env.TELEGRAM_API_ID) {
+    env.TELEGRAM_API_ID = process.env.TELEGRAM_API_ID;
+  }
+  if (process.env.TELEGRAM_API_HASH) {
+    env.TELEGRAM_API_HASH = process.env.TELEGRAM_API_HASH;
+  }
   env.TELEGRAM_SESSION = session;
   saveEnv(env);
 
@@ -319,6 +325,8 @@ async function completeAuth(client: TelegramClient, user: User): Promise<void> {
   await cleanupAuthClient();
   closeAllSSE();
 }
+
+export { completeAuth as completeAuthForTests };
 
 // ---------------------------------------------------------------------------
 // Cleanup
